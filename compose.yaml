@@ -11,3 +11,5 @@ services:
       - MCP_KLARTEXT_PUBLIC_URL=${MCP_KLARTEXT_PUBLIC_URL:-https://mcp-klartext.cdit-dev.de}
       - KEYCLOAK_ISSUER=${KEYCLOAK_ISSUER:-https://auth.cdit-works.de/realms/cdit-mcp}
       - KEYCLOAK_AUDIENCE=${KEYCLOAK_AUDIENCE:-mcp-klartext}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-mcp-klartext}
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
