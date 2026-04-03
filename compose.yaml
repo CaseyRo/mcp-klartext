@@ -13,3 +13,9 @@ services:
       - KEYCLOAK_AUDIENCE=${KEYCLOAK_AUDIENCE:-mcp-klartext}
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-mcp-klartext}
       - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
+      - FASTMCP_HOME=/data/fastmcp
+    volumes:
+      - fastmcp-data:/data/fastmcp
+
+volumes:
+  fastmcp-data:
