@@ -29,18 +29,6 @@ class Settings(BaseSettings):
 
     model_config = {"env_prefix": "", "case_sensitive": False}
 
-    def ensure_api_key(self) -> str:
-        """Return the API key, generating one if not configured."""
-        if self.mcp_klartext_api_key:
-            return self.mcp_klartext_api_key
-
-        from mcp_klartext.auth import generate_api_key
-
-        key = generate_api_key()
-        self.mcp_klartext_api_key = key
-        logger.warning("Generated API key: %s (set MCP_KLARTEXT_API_KEY to persist)", key)
-        return key
-
     @property
     def base_url(self) -> str:
         """Public URL for OAuth metadata, or computed from host:port."""

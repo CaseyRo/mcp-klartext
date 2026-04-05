@@ -28,9 +28,7 @@ def _build_auth():
             "KEYCLOAK_CLIENT_SECRET not set — running without auth"
         )
         return None
-    api_key = settings.ensure_api_key()
     return create_auth(
-        api_key=api_key,
         base_url=settings.base_url,
         keycloak_issuer=settings.keycloak_issuer,
         keycloak_client_id=settings.keycloak_client_id,
