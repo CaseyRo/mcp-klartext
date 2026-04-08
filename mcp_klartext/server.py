@@ -188,7 +188,7 @@ async def get_platform_template(platform: str) -> dict:
 def main() -> None:
     """Entry point for the mcp-klartext server."""
     if settings.transport == "http":
-        mcp.run(transport="http", host=settings.host, port=settings.port)
+        mcp.run(transport="streamable-http", host=settings.host, port=settings.port)
     else:
         mcp.run()
 
