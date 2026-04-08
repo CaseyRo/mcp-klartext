@@ -185,6 +185,73 @@ async def get_platform_template(platform: str) -> dict:
     }
 
 
+@mcp.tool
+async def portal_routing_guide() -> dict:
+    """[infra] Returns a routing guide mapping common intents to the correct upstream MCP server.
+
+    Call this once per session to understand which server handles what.
+    Use the domain tags in tool descriptions ([finance], [notes], etc.) for quick filtering.
+    """
+    return {
+        "servers": {
+            "lexoffice": {
+                "domain": "finance",
+                "intents": ["create invoice", "manage contacts (accounting)", "quotations", "expenses", "financial overview"],
+            },
+            "outbank": {
+                "domain": "finance",
+                "intents": ["search bank transactions", "aggregate spending", "budget analysis"],
+            },
+            "siyuan": {
+                "domain": "notes",
+                "intents": ["search notes", "create documents", "manage notebooks", "daily notes", "find tasks in notes"],
+            },
+            "apple-notes": {
+                "domain": "notes",
+                "intents": ["create Apple Notes", "create recipe notes"],
+            },
+            "things": {
+                "domain": "tasks-gtd",
+                "intents": ["capture tasks", "GTD workflow", "daily/weekly review", "project planning", "inbox processing"],
+            },
+            "zernio": {
+                "domain": "social",
+                "intents": ["social media posts", "schedule content", "analytics", "comments", "inbox/DMs", "manage accounts"],
+            },
+            "watermelon": {
+                "domain": "crm",
+                "intents": ["CRM contacts", "live-chat conversations", "send messages", "webhooks"],
+            },
+            "writings": {
+                "domain": "content",
+                "intents": ["create blog posts", "newsletters", "reflections", "publish content", "search writings"],
+            },
+            "klartext": {
+                "domain": "content",
+                "intents": ["brand voice context", "platform templates", "copywriting guidelines"],
+            },
+            "ytdlp": {
+                "domain": "media",
+                "intents": ["download videos", "convert video formats"],
+            },
+            "instaloader": {
+                "domain": "media",
+                "intents": ["fetch Instagram posts/reels"],
+            },
+            "read-website-fast": {
+                "domain": "web",
+                "intents": ["read web pages", "extract content as markdown"],
+            },
+        },
+        "disambiguation": {
+            "create contact": "For accounting → lexoffice. For CRM/chat → watermelon.",
+            "search": "For notes → siyuan. For social → zernio. For blog content → writings.",
+            "create note": "For Apple Notes → apple-notes. For blog drafts → writings.",
+            "send message": "For live-chat → watermelon. For social DMs → zernio.",
+        },
+    }
+
+
 def main() -> None:
     """Entry point for the mcp-klartext server."""
     if settings.transport == "http":
