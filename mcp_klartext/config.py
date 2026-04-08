@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import logging
-import secrets
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic_settings import BaseSettings
 
@@ -17,24 +16,7 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
 
-    # MCP server auth
-    mcp_klartext_api_key: str = ""
-    mcp_klartext_public_url: str = ""
-
-    # Keycloak OIDC
-    keycloak_issuer: str = "https://auth.cdit-works.de/realms/cdit-mcp"
-    keycloak_audience: str = "mcp-klartext"
-    keycloak_client_id: str = "mcp-klartext"
-    keycloak_client_secret: str = ""
-
     model_config = {"env_prefix": "", "case_sensitive": False}
-
-    @property
-    def base_url(self) -> str:
-        """Public URL for OAuth metadata, or computed from host:port."""
-        if self.mcp_klartext_public_url:
-            return self.mcp_klartext_public_url.rstrip("/")
-        return f"http://{self.host}:{self.port}"
 
 
 settings = Settings()
