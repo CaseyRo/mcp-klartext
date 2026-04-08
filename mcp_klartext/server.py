@@ -42,7 +42,7 @@ async def generate_text_context(
     platform: str | None = None,
     language: str | None = None,
 ) -> dict:
-    """Get complete writing context for brand-aware content generation.
+    """[content] Get complete writing context for brand-aware content generation.
 
     Returns voice DNA rules, brand-specific settings, platform template,
     bleed scan rules, and the Bildsprache handshake format — everything
@@ -111,7 +111,7 @@ async def generate_text_context(
 
 @mcp.tool
 async def get_voice_dna() -> dict:
-    """Get Casey's voice DNA rules for content generation.
+    """[content] Get Casey's voice DNA rules for content generation.
 
     Returns opening patterns, sentence architecture, signature moves,
     closing patterns, vocabulary use/avoid lists, trilingual workflow,
@@ -124,7 +124,7 @@ async def get_voice_dna() -> dict:
 
 @mcp.tool
 async def get_brand_context(context: str | None = None) -> dict:
-    """Get brand-specific voice, visual, and language settings.
+    """[content] Get brand-specific voice, visual, and language settings.
 
     Args:
         context: Specific brand to retrieve (@casey.berlin, @cdit-works,
@@ -152,7 +152,7 @@ async def get_brand_context(context: str | None = None) -> dict:
 
 @mcp.tool
 async def list_platforms() -> dict:
-    """List available platform templates with their key constraints."""
+    """[content] List available platform templates with their key constraints."""
     return {
         "platforms": [
             {
@@ -167,7 +167,7 @@ async def list_platforms() -> dict:
 
 @mcp.tool
 async def get_platform_template(platform: str) -> dict:
-    """Get a specific platform's full template with structure and constraints.
+    """[content] Get a specific platform's full template with structure and constraints.
 
     Args:
         platform: Platform name (linkedin-post, linkedin-article, blog,
