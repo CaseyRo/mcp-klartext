@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Literal
 
 from fastmcp import FastMCP
 from mcp.types import Icon
@@ -47,6 +48,9 @@ async def generate_text_context(
     Returns voice DNA rules, brand-specific settings, platform template,
     bleed scan rules, and the Bildsprache handshake format — everything
     an LLM needs to generate content in Casey's voice.
+
+    Prefer this single call over separate get_voice_dna + get_brand_context
+    + get_platform_template calls — it returns all three in one response.
 
     Args:
         context: Brand context (@casey.berlin, @cdit-works, @storykeep, @nah, @yorizon).
@@ -166,7 +170,7 @@ async def list_platforms() -> dict:
 
 
 @mcp.tool
-async def get_platform_template(platform: str) -> dict:
+async def get_platform_template(platform: Literal["linkedin-post", "linkedin-article", "blog", "newsletter", "reflection", "proposal", "instagram", "whatsapp"]) -> dict:
     """[content] Get a specific platform's full template with structure and constraints.
 
     Args:
