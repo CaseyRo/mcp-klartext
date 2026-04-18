@@ -6,9 +6,14 @@ import logging
 import os
 from typing import Literal
 
+from datetime import datetime, timezone
+
 from fastmcp import FastMCP
 from mcp.types import Icon
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
+from mcp_klartext import __version__
 from mcp_klartext.auth import BearerTokenVerifier
 from mcp_klartext.config import settings
 from mcp_klartext.platforms import load_platforms
@@ -21,9 +26,15 @@ logger = logging.getLogger(__name__)
 voice_data = load_voice_data()
 platform_data = load_platforms()
 
-# Build authentication (bearer token via MCP_API_KEY)
+# Build authentication (bearer token via MCP_API_KEY). Fail-fast in HTTP mode.
 _api_key = os.getenv("MCP_API_KEY", "")
+if settings.transport == "http" and not _api_key:
+    raise SystemExit(
+        "MCP_API_KEY is required in HTTP mode. Refusing to start "
+        "an unauthenticated server."
+    )
 _auth = BearerTokenVerifier(api_key=_api_key) if _api_key else None
+_start_time = datetime.now(timezone.utc)
 
 mcp = FastMCP(
     "mcp-klartext",
@@ -327,10 +338,34 @@ async def portal_routing_guide() -> dict:
     }
 
 
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request: Request) -> JSONResponse:
+    """Public health endpoint. No upstream dependency — filesystem-backed."""
+    return JSONResponse({
+        "status": "healthy",
+        "service": "mcp-klartext",
+        "version": __version__,
+        "upstream_reachable": True,
+        "uptime_seconds": int(
+            (datetime.now(timezone.utc) - _start_time).total_seconds()
+        ),
+    })
+
+
+@mcp.custom_route("/healthz", methods=["GET"])
+async def health_check_z(request: Request) -> JSONResponse:
+    return await health_check(request)
+
+
 def main() -> None:
     """Entry point for the mcp-klartext server."""
     if settings.transport == "http":
-        mcp.run(transport="streamable-http", host=settings.host, port=settings.port)
+        mcp.run(
+            transport="streamable-http",
+            host=settings.host,
+            port=settings.port,
+            stateless_http=True,
+        )
     else:
         mcp.run()
 
