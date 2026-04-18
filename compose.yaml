@@ -1,6 +1,6 @@
 services:
   mcp-klartext:
-    build: .
+    image: ghcr.io/caseyro/mcp-klartext:latest
     restart: unless-stopped
     ports:
       - "8008:8000"
