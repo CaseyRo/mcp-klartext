@@ -1,6 +1,6 @@
 [project]
 name = "mcp-klartext"
-version = "0.2.4"
+version = "0.2.5"
 description = "MCP server for brand-aware copywriting — voice DNA, brand contexts, platform templates"
 readme = "README.md"
 license = "MIT"

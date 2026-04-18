@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.5] - 2026-04-18
+
+- feat(reliability): stateless_http, /health, fail-fast auth
+
+
 ## [0.2.4] - 2026-04-18
 
 - chore: switch compose to ghcr image; bump Actions to Node 24 majors
