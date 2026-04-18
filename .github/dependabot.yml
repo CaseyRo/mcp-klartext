@@ -1,0 +1,48 @@
+version: 2
+
+# Security updates are always enabled and open PRs immediately regardless of
+# the schedule below. The schedule only applies to non-security updates.
+#
+# Note on uv: Dependabot doesn't yet support uv.lock regeneration. These PRs
+# bump minimum versions in pyproject.toml; uv.lock drifts until someone runs
+# `uv sync` (locally or via the release CI on main). For a PR to land clean,
+# pull the branch and run `uv sync` before merging, or accept that uv.lock
+# gets reconciled on the next push to main.
+
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      python-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      actions:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "ci"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+      - "docker"
