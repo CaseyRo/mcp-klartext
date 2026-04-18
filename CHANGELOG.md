@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.6] - 2026-04-18
+
+- chore: add Dependabot config for pip, actions, docker
+
+
 ## [0.2.5] - 2026-04-18
 
 - feat(reliability): stateless_http, /health, fail-fast auth
