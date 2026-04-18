@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.4] - 2026-04-18
+
+- chore: switch compose to ghcr image; bump Actions to Node 24 majors
+
+
 ## [0.2.2] - 2026-04-09
 
 - fix: lowercase Docker image tags in release CI
