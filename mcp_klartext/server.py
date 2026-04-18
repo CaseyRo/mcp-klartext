@@ -12,6 +12,7 @@ from mcp.types import Icon
 from mcp_klartext.auth import BearerTokenVerifier
 from mcp_klartext.config import settings
 from mcp_klartext.platforms import load_platforms
+from mcp_klartext.scanner import scan_for_ai_tells
 from mcp_klartext.voice import load_voice_data
 
 logger = logging.getLogger(__name__)
@@ -82,8 +83,7 @@ async def generate_text_context(
             "missing": True,
             "hint": "No brand context specified. Available brands:",
             "available": [
-                {"key": k, "name": v.name}
-                for k, v in voice_data.brands.items()
+                {"key": k, "name": v.name} for k, v in voice_data.brands.items()
             ],
         }
 
@@ -170,7 +170,18 @@ async def list_platforms() -> dict:
 
 
 @mcp.tool
-async def get_platform_template(platform: Literal["linkedin-post", "linkedin-article", "blog", "newsletter", "reflection", "proposal", "instagram", "whatsapp"]) -> dict:
+async def get_platform_template(
+    platform: Literal[
+        "linkedin-post",
+        "linkedin-article",
+        "blog",
+        "newsletter",
+        "reflection",
+        "proposal",
+        "instagram",
+        "whatsapp",
+    ],
+) -> dict:
     """[content] Get a specific platform's full template with structure and constraints.
 
     Args:
@@ -190,6 +201,22 @@ async def get_platform_template(platform: Literal["linkedin-post", "linkedin-art
 
 
 @mcp.tool
+async def scan_draft(text: str) -> dict:
+    """[content] Scan a draft for AI-tell patterns before finalizing it.
+
+    Implements the AI Bleed Scan rubric (see voice DNA) programmatically.
+    Run this after generating a draft and before emitting the final Output
+    Format block. If `clean` is false, rewrite the flagged spans and re-scan.
+
+    Returns:
+        issues: list of {category, pattern, match, line, severity, suggestion}
+        stats: {word_count, em_dash_count, em_dash_budget, high/medium/low counts}
+        clean: true iff no high or medium severity hits
+    """
+    return scan_for_ai_tells(text)
+
+
+@mcp.tool
 async def portal_routing_guide() -> dict:
     """[infra] Returns a routing guide mapping common intents to the correct upstream MCP server.
 
@@ -200,15 +227,31 @@ async def portal_routing_guide() -> dict:
         "servers": {
             "lexoffice": {
                 "domain": "finance",
-                "intents": ["create invoice", "manage contacts (accounting)", "quotations", "expenses", "financial overview"],
+                "intents": [
+                    "create invoice",
+                    "manage contacts (accounting)",
+                    "quotations",
+                    "expenses",
+                    "financial overview",
+                ],
             },
             "outbank": {
                 "domain": "finance",
-                "intents": ["search bank transactions", "aggregate spending", "budget analysis"],
+                "intents": [
+                    "search bank transactions",
+                    "aggregate spending",
+                    "budget analysis",
+                ],
             },
             "siyuan": {
                 "domain": "notes",
-                "intents": ["search notes", "create documents", "manage notebooks", "daily notes", "find tasks in notes"],
+                "intents": [
+                    "search notes",
+                    "create documents",
+                    "manage notebooks",
+                    "daily notes",
+                    "find tasks in notes",
+                ],
             },
             "apple-notes": {
                 "domain": "notes",
@@ -216,23 +259,51 @@ async def portal_routing_guide() -> dict:
             },
             "things": {
                 "domain": "tasks-gtd",
-                "intents": ["capture tasks", "GTD workflow", "daily/weekly review", "project planning", "inbox processing"],
+                "intents": [
+                    "capture tasks",
+                    "GTD workflow",
+                    "daily/weekly review",
+                    "project planning",
+                    "inbox processing",
+                ],
             },
             "zernio": {
                 "domain": "social",
-                "intents": ["social media posts", "schedule content", "analytics", "comments", "inbox/DMs", "manage accounts"],
+                "intents": [
+                    "social media posts",
+                    "schedule content",
+                    "analytics",
+                    "comments",
+                    "inbox/DMs",
+                    "manage accounts",
+                ],
             },
             "watermelon": {
                 "domain": "crm",
-                "intents": ["CRM contacts", "live-chat conversations", "send messages", "webhooks"],
+                "intents": [
+                    "CRM contacts",
+                    "live-chat conversations",
+                    "send messages",
+                    "webhooks",
+                ],
             },
             "writings": {
                 "domain": "content",
-                "intents": ["create blog posts", "newsletters", "reflections", "publish content", "search writings"],
+                "intents": [
+                    "create blog posts",
+                    "newsletters",
+                    "reflections",
+                    "publish content",
+                    "search writings",
+                ],
             },
             "klartext": {
                 "domain": "content",
-                "intents": ["brand voice context", "platform templates", "copywriting guidelines"],
+                "intents": [
+                    "brand voice context",
+                    "platform templates",
+                    "copywriting guidelines",
+                ],
             },
             "ytdlp": {
                 "domain": "media",

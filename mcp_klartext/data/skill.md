@@ -51,8 +51,10 @@ Use ONE — never throat-clear with preamble. First sentence ≤12 words.
 ### Sentence Architecture
 
 - **Default:** 8-18 words. Short punches after longer flows. Rhythm: long-short-short.
-- **Em dashes** for pivots. **Colons** for payoffs. **Fragments** as standalone paragraphs.
-- **Three-part lists** with escalation. **Parentheticals** for self-aware asides.
+- **Periods** for punch. **Colons** for payoffs. **Fragments** as standalone paragraphs.
+- **Em-dashes** only when a comma or period genuinely won't carry the pivot — max one per paragraph, never more than two in a row across a piece. Em-dashes peppered through a draft are the single strongest AI tell in 2026; a reader who clocks it stops reading.
+- **Three-part lists** with genuine escalation (each item adds weight). Two cosmetic tricolons in a row reads as AI. Break the pattern by the third paragraph.
+- **Parentheticals** for self-aware asides — sparingly. One per piece, tops.
 
 ### Signature Moves
 
@@ -82,7 +84,9 @@ NEVER end with summary, takeaways, or CTA. Use ONE:
 
 ### Vocabulary — NEVER Use
 
-"In today's fast-paced..." · "Excited to announce..." · "Game-changer" · "revolutionary" · "disrupt" · "Thought leader" · "Leverage" (verb) · "synergy" · "stakeholder alignment" · "Incredible opportunity" · "It could be argued that..." · Stacked adjectives · "Just" dismissively · Clickbait promises · AI hype
+**Corporate/hype:** "In today's fast-paced..." · "Excited to announce..." · "Game-changer" · "revolutionary" · "disrupt" · "thought leader" · "synergy" · "stakeholder alignment" · "incredible opportunity" · "It could be argued that..." · stacked adjectives · "just" dismissively · clickbait promises · AI hype
+
+**AI tells (2026):** "delve" · "leverage" (verb) · "seamless(ly)" · "robust" · "navigate the [abstract noun]" · "paradigm (shift)" · "unlock (your/the)" · "foster" · "embark on" · "harness" · "tapestry" · "landscape" (as metaphor) · "realm" · "testament to" · "at the intersection of" · "it's not (just) X — it's Y" · "more than just" · "beyond (the|just)" · "let's dive in" · "imagine a world" · "in a world where" · "it's worth noting that"
 
 ---
 
@@ -139,6 +143,44 @@ When the user signals correction ("too formal", "not my voice", "wrong opener"):
 1. Identify which Voice DNA rule was violated
 2. Show diagnosis: "I used a Familiar Reference opening — you seem to prefer Quiet Confession for this topic"
 3. Offer to persist to `voice_calibration.md` in project memory for future sessions
+
+---
+
+## AI Bleed Scan
+
+Run this rubric on every draft **before** emitting the Output Format block. If the scan finds any **high-severity** hit, rewrite the affected sentence(s) and re-scan — do not ship a draft that failed the scan.
+
+The `scan_draft` tool implements this rubric programmatically. For longer pieces (> 300 words) or anything going to a client, call `scan_draft` after generation as a second pass. For short drafts, the mental rubric below is enough.
+
+### The rubric
+
+**1. Em-dash budget.** Count em-dashes (`—`). Budget: one per ~150 words, max one per paragraph. Over budget → replace with periods or colons. A draft with em-dashes in every paragraph reads as AI to anyone paying attention.
+
+**2. Lexical tells (high severity).** Any hit = rewrite the sentence. No exceptions.
+- delve, leverage (verb), seamless(ly), robust, navigate the [abstract], paradigm, unlock (your|the), foster, embark, harness, tapestry, landscape (metaphor), realm, testament to, at the intersection of
+
+**3. Phrase tells (high severity).** Any hit = rewrite.
+- "it's not (just) X — it's Y" / "not just X, but Y"
+- "more than just" / "beyond (the|just)"
+- "let's dive in" / "imagine a world" / "in a world where"
+- "it's worth noting that" / "it could be argued that"
+- "in today's fast-paced" / "in an era of"
+
+**4. Structural tells (medium severity).** Two+ hits = rewrite.
+- Two cosmetic tricolons in consecutive paragraphs (three-item lists where items don't escalate).
+- Starting three+ consecutive sentences with the same word.
+- Every paragraph ending on an em-dash pivot or colon payoff — vary the landing.
+- Closing with a generic "What will you..." / "Are you ready to..." rhetorical question. Reflective questions are fine; sales-pitch questions are not.
+
+**5. Adjective stacking (low severity).** Three+ adjectives in a row = trim to one. "A warm, thoughtful, practical approach" → "a practical approach."
+
+### Output after a pass
+
+If the scan is clean, proceed to Output Format. If not, log the hits inline for the user:
+```
+Scan: 2 em-dashes over budget (¶2, ¶4); "navigate the landscape" in ¶3. Rewriting.
+```
+Then fix and re-scan before final output.
 
 ---
 

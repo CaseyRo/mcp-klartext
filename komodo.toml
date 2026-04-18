@@ -10,8 +10,5 @@ git_provider = "github.com"
 repo = "CaseyRo/mcp-klartext"
 branch = "main"
 environment = """
-MCP_KLARTEXT_API_KEY = [[MCP_KLARTEXT_API_KEY]]
-MCP_KLARTEXT_PUBLIC_URL = https://mcp-klartext.cdit-dev.de
-KEYCLOAK_ISSUER = https://auth.cdit-works.de/realms/cdit-mcp
-KEYCLOAK_AUDIENCE = mcp-klartext
+MCP_API_KEY = [[MCP_KLARTEXT_API_KEY]]
 """

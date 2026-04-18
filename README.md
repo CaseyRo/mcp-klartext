@@ -22,5 +22,4 @@ docker compose up
 
 ## Authentication
 
-- **Claude.ai**: Keycloak OAuth (confidential OIDC client `mcp-klartext`)
-- **Claude Code / n8n**: Bearer token (`Authorization: Bearer bmcp_...`)
+Bearer token via `MCP_API_KEY`. Clients send `Authorization: Bearer <token>`. If `MCP_API_KEY` is unset the server runs unauthenticated — only do this for local stdio use.

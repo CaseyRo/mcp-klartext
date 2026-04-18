@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -120,6 +119,25 @@ def _extract_voice_calibration(skill_content: str) -> str:
     return "\n".join(result).strip()
 
 
+def _extract_ai_bleed_scan(skill_content: str) -> str:
+    """Extract the AI Bleed Scan section from SKILL.md."""
+    lines = skill_content.split("\n")
+    capture = False
+    result = []
+
+    for line in lines:
+        if line.startswith("## AI Bleed Scan"):
+            capture = True
+            result.append(line)
+            continue
+        if capture:
+            if line.startswith("## ") and "AI Bleed Scan" not in line:
+                break
+            result.append(line)
+
+    return "\n".join(result).strip()
+
+
 def _brand_key(filename: str) -> str:
     """Convert filename like 'casey-berlin.md' to context key 'casey.berlin'."""
     name = filename.replace(".md", "")
@@ -146,6 +164,7 @@ def load_voice_data() -> VoiceData:
         handshake = _extract_handshake(content)
         output_format = _extract_output_format(content)
         calibration = _extract_voice_calibration(content)
+        ai_bleed_scan = _extract_ai_bleed_scan(content)
         if trilingual:
             data.voice_dna += "\n\n" + trilingual
         if handshake:
@@ -154,6 +173,8 @@ def load_voice_data() -> VoiceData:
             data.voice_dna += "\n\n" + output_format
         if calibration:
             data.voice_dna += "\n\n" + calibration
+        if ai_bleed_scan:
+            data.voice_dna += "\n\n" + ai_bleed_scan
     else:
         logger.warning("SKILL.md not found at %s", skill_path)
 

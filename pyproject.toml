@@ -7,10 +7,10 @@ license = "MIT"
 requires-python = ">=3.11"
 authors = [{ name = "Casey Romkes" }]
 dependencies = [
-    "fastmcp>=3.2.2",
-    "httpx>=0.28.0",
-    "pydantic>=2.10",
-    "pydantic-settings>=2.12.0",
+    "fastmcp>=3.2.4",
+    "httpx>=0.28.1",
+    "pydantic>=2.12",
+    "pydantic-settings>=2.13",
 ]
 
 [project.scripts]
@@ -29,7 +29,7 @@ testpaths = ["tests"]
 
 [dependency-groups]
 dev = [
-    "pytest>=8.0",
-    "pytest-asyncio>=0.24",
-    "ruff>=0.8",
+    "pytest>=9.0",
+    "pytest-asyncio>=1.0",
+    "ruff>=0.14",
 ]
