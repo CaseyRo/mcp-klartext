@@ -1,48 +1,57 @@
 version: 2
 
-# Security updates are always enabled and open PRs immediately regardless of
-# the schedule below. The schedule only applies to non-security updates.
-#
-# Note on uv: Dependabot doesn't yet support uv.lock regeneration. These PRs
-# bump minimum versions in pyproject.toml; uv.lock drifts until someone runs
-# `uv sync` (locally or via the release CI on main). For a PR to land clean,
-# pull the branch and run `uv sync` before merging, or accept that uv.lock
-# gets reconciled on the next push to main.
+# uv ecosystem updates both pyproject.toml AND uv.lock in a single PR.
+# Supersedes the earlier pip-ecosystem config (which couldn't regenerate uv.lock).
 
 updates:
-  - package-ecosystem: "pip"
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
-      interval: "monthly"
-    groups:
-      python-minor-patch:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
     open-pull-requests-limit: 5
+    commit-message:
+      prefix: "fix"
+      prefix-development: "chore"
+      include: "scope"
     labels:
       - "dependencies"
-      - "python"
-
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "monthly"
     groups:
-      actions:
+      python-runtime:
         patterns:
-          - "*"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "ci"
+          - "fastmcp"
+          - "pydantic"
+          - "pydantic-settings"
+          - "httpx"
+      dev-tools:
+        dependency-type: "development"
 
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "monthly"
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    commit-message:
+      prefix: "fix"
+      include: "scope"
     labels:
       - "dependencies"
       - "docker"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "ci"
