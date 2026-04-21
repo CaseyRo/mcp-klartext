@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.8] - 2026-04-21
+
+- fix(security): SecretStr for MCP_API_KEY, add __main__.py + py.typed
+
+
 ## [0.2.6] - 2026-04-18
 
 - chore: add Dependabot config for pip, actions, docker
