@@ -5,7 +5,7 @@ deploy = true
 tags = ["mcp"]
 
 [stack.config]
-server_id = "ubuntu-smurf-mirror"
+server_id = "nebula-1"
 git_provider = "github.com"
 repo = "CaseyRo/mcp-klartext"
 branch = "main"
