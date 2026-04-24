@@ -10,6 +10,13 @@ from __future__ import annotations
 import re
 from dataclasses import asdict, dataclass
 
+from mcp_klartext.references import (
+    detect_image_embeds,
+    has_readmore_heading,
+    parse_frontmatter,
+    references_from_frontmatter,
+)
+
 # High-severity single words. Word-boundary match, case-insensitive.
 # Each entry is (pattern, human_label, suggestion).
 LEXICAL_TELLS: list[tuple[str, str, str]] = [
@@ -237,24 +244,106 @@ def _find_repeated_sentence_openers(text: str) -> list[Issue]:
     return issues
 
 
+def _find_attribution_issues(
+    text: str, body: str, meta: dict
+) -> tuple[list[Issue], dict]:
+    """Flag missing Read more block and uncaptioned AI images.
+
+    Returns (issues, diagnostics). Diagnostics is the attribution summary
+    surfaced in the scan result for authors' pre-publish dashboard.
+    """
+    issues: list[Issue] = []
+
+    refs = references_from_frontmatter(meta)
+    readmore_rendered = has_readmore_heading(body)
+
+    if refs and not readmore_rendered:
+        # Warning severity — authors may deliberately omit the block.
+        issues.append(
+            Issue(
+                category="attribution",
+                pattern="NO_READMORE",
+                match=f"{len(refs)} reference(s) in frontmatter, no Read more heading",
+                line=1,
+                severity="medium",  # warning-tier in our severity scheme
+                suggestion=(
+                    "Add a 'Read more' / 'Weiterlesen' section, or render it "
+                    "programmatically via klartext_render_readmore."
+                ),
+            )
+        )
+
+    embeds = detect_image_embeds(body)
+    ai_images = [e for e in embeds if e.is_bildsprache]
+    captioned = [e for e in ai_images if e.has_ai_caption or _AI_CAPTION_MARKERS.search(e.alt)]
+
+    for embed in ai_images:
+        if embed.has_ai_caption or _AI_CAPTION_MARKERS.search(embed.alt):
+            continue
+        issues.append(
+            Issue(
+                category="attribution",
+                pattern="UNCAPTIONED_AI_IMAGE",
+                match=embed.src,
+                line=embed.line,
+                severity="high",  # error-tier — AI images must be labelled
+                suggestion=(
+                    "Add 'AI-generated' / 'KI-generiert' to the alt text or a "
+                    "caption line adjacent to the image embed."
+                ),
+            )
+        )
+
+    diagnostics = {
+        "ai_images_total": len(ai_images),
+        "ai_images_captioned": len(captioned),
+        "references_count": len(refs),
+        "readmore_rendered": readmore_rendered,
+    }
+    return issues, diagnostics
+
+
+# Re-export for _find_attribution_issues
+_AI_CAPTION_MARKERS = re.compile(
+    r"\b(?:ai[-\s]?generated|ki[-\s]?generiert|mit\s+ki|with\s+ai)\b", re.IGNORECASE
+)
+
+
 def scan_for_ai_tells(text: str) -> dict:
     """Run the AI Bleed Scan rubric on a draft.
 
     Returns a dict with issues, stats, and a `clean` boolean indicating
     whether the draft is free of high/medium severity hits.
+
+    When the input has YAML frontmatter, the scan also runs attribution
+    checks (NO_READMORE, UNCAPTIONED_AI_IMAGE) against the body, and the
+    result includes an `attribution` diagnostics block.
     """
-    word_count = _word_count(text)
+    meta, body = parse_frontmatter(text)
+    # For all other checks we scan the full text; body-only for image detection.
+    scannable = body if meta else text
+
+    word_count = _word_count(scannable)
 
     em_dash_issues, em_dash_count, em_dash_budget = _find_em_dash_issues(
-        text, word_count
+        scannable, word_count
     )
-    lexical_issues = _find_lexical_issues(text)
-    phrase_issues = _find_phrase_issues(text)
-    structural_issues = _find_adjective_stacks(text) + _find_repeated_sentence_openers(
-        text
+    lexical_issues = _find_lexical_issues(scannable)
+    phrase_issues = _find_phrase_issues(scannable)
+    structural_issues = _find_adjective_stacks(scannable) + _find_repeated_sentence_openers(
+        scannable
+    )
+    attribution_issues, attribution_diagnostics = _find_attribution_issues(
+        text, body if meta else text, meta
     )
 
-    issues = lexical_issues + phrase_issues + em_dash_issues + structural_issues
+    issues = (
+        lexical_issues
+        + phrase_issues
+        + em_dash_issues
+        + structural_issues
+        + attribution_issues
+    )
     issues.sort(key=lambda i: (i.line, i.category))
 
     blocking = [i for i in issues if i.severity in ("high", "medium")]
@@ -270,5 +359,6 @@ def scan_for_ai_tells(text: str) -> dict:
             "medium": sum(1 for i in issues if i.severity == "medium"),
             "low": sum(1 for i in issues if i.severity == "low"),
         },
+        "attribution": attribution_diagnostics,
         "clean": len(blocking) == 0,
     }

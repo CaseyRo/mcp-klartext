@@ -16,6 +16,12 @@ from mcp_klartext import __version__
 from mcp_klartext.auth import BearerTokenVerifier
 from mcp_klartext.config import settings
 from mcp_klartext.platforms import load_platforms
+from mcp_klartext.references import (
+    parse_frontmatter,
+    references_from_frontmatter,
+    render_ai_caption,
+    render_readmore as _render_readmore_block,
+)
 from mcp_klartext.scanner import scan_for_ai_tells
 from mcp_klartext.voice import load_voice_data
 
@@ -48,6 +54,7 @@ async def generate_text_context(
     context: str | None = None,
     platform: str | None = None,
     language: str | None = None,
+    references: list[dict] | None = None,
 ) -> dict:
     """[content] Get complete writing context for brand-aware content generation.
 
@@ -64,6 +71,11 @@ async def generate_text_context(
         platform: Target platform (linkedin-post, blog, newsletter, etc.).
                   If omitted, returns available platforms list.
         language: Target language (en, de, nl). Affects trilingual workflow rules.
+        references: Optional list of source references the caller is drafting
+                    against. Each entry: {type: "stolperstein"|"url"|"document",
+                    id?, href?, sha256?, title?}. Klartext is stateless — it
+                    echoes these back under `references_passthrough` so the
+                    caller can persist them into the draft's frontmatter.
     """
     result: dict = {
         "voice_dna": voice_data.voice_dna,
@@ -114,6 +126,13 @@ async def generate_text_context(
     # Language hint
     if language:
         result["language"] = language
+
+    # Reference pass-through — Klartext does not persist drafts; the caller
+    # (Writings or orchestrator) is expected to write these into the draft's
+    # frontmatter under `references` so klartext_scan_draft and
+    # render_readmore can see them on the next pass.
+    if references:
+        result["references_passthrough"] = references
 
     return result
 
@@ -219,6 +238,68 @@ async def scan_draft(text: str) -> dict:
         clean: true iff no high or medium severity hits
     """
     return scan_for_ai_tells(text)
+
+
+@mcp.tool
+async def render_readmore(
+    draft_markdown: str,
+    language: Literal["de", "en", "nl"] = "en",
+) -> dict:
+    """[content] Render a 'Weiterlesen' / 'Read more' block from a draft's references.
+
+    Stateless — parses the YAML frontmatter of the provided draft, looks for
+    a `references: [...]` array, and returns the rendered block. Empty input
+    returns an empty string.
+
+    The caller is responsible for inserting the returned block into the draft
+    before publishing (Klartext does not persist drafts).
+
+    Args:
+        draft_markdown: Full draft markdown including YAML frontmatter.
+        language: Output language. "de" → "Weiterlesen", "en" → "Read more".
+
+    Returns:
+        {block: str, references: [...], language: str}
+    """
+    meta, _ = parse_frontmatter(draft_markdown)
+    refs = references_from_frontmatter(meta)
+    block = _render_readmore_block(refs, language=language)
+    return {
+        "block": block,
+        "references": [
+            {
+                "type": r.type,
+                "id": r.id,
+                "href": r.href,
+                "sha256": r.sha256,
+                "title": r.title,
+            }
+            for r in refs
+        ],
+        "language": language,
+    }
+
+
+@mcp.tool
+async def render_ai_image_caption(
+    attribution: dict,
+    language: Literal["de", "en", "nl"] = "en",
+) -> dict:
+    """[content] Render a figure caption from an ai_attribution payload.
+
+    Produces a caption string combining (a) the author's `prompt_anchor` as a
+    brief description and (b) a localised 'AI-generated with <provider>/<model>'
+    attribution line. Use this when embedding Bildsprache images into Klartext
+    drafts.
+
+    Args:
+        attribution: ai_attribution payload (v1) from Bildsprache.
+        language: Output language.
+
+    Returns:
+        {caption: str}
+    """
+    return {"caption": render_ai_caption(attribution, language=language)}
 
 
 @mcp.tool
