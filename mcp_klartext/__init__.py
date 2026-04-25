@@ -1,3 +1,8 @@
 """MCP server for brand-aware copywriting."""
 
-__version__ = "0.2.3"
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("mcp-klartext")
+except PackageNotFoundError:
+    __version__ = "unknown"

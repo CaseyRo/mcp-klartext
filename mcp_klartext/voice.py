@@ -139,16 +139,14 @@ def _extract_ai_bleed_scan(skill_content: str) -> str:
 
 
 def _brand_key(filename: str) -> str:
-    """Convert filename like 'casey-berlin.md' to context key 'casey.berlin'."""
-    name = filename.replace(".md", "")
-    mapping = {
-        "casey-berlin": "casey.berlin",
-        "cdit-works": "cdit-works",
-        "storykeep": "storykeep",
-        "nah": "nah",
-        "yorizon": "yorizon",
-    }
-    return mapping.get(name, name)
+    """Convert a brand-file name to its canonical bare-slug context key.
+
+    CDI-1041: filenames already match the canonical form
+    (``casey-berlin.md`` → ``casey-berlin``); we just strip the extension.
+    Historical mapping that produced ``casey.berlin`` (with dot) has been
+    retired in favour of fleet-wide canonical bare slugs.
+    """
+    return filename.replace(".md", "")
 
 
 def load_voice_data() -> VoiceData:
