@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.9] - 2026-04-25
+
+- feat(references): reference surfacing + AI image attribution scan (CDI-1014) (#10)
+
+
 ## [0.2.8] - 2026-04-21
 
 - fix(security): SecretStr for MCP_API_KEY, add __main__.py + py.typed
