@@ -9,8 +9,8 @@ authors = [{ name = "Casey Romkes" }]
 dependencies = [
     "fastmcp>=3.2.4",
     "httpx>=0.28.1",
-    "pydantic>=2.12",
-    "pydantic-settings>=2.13",
+    "pydantic>=2.13.3",
+    "pydantic-settings>=2.14.0",
     "pyyaml>=6.0",
 ]
 
