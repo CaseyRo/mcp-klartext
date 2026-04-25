@@ -94,14 +94,30 @@ async def test_get_brand_context_lists_brands_when_omitted(client: Client):
     result = await client.call_tool("get_brand_context", {})
     payload = _payload(result)
     keys = {b["key"] for b in payload["brands"]}
-    assert {"casey.berlin", "cdit-works", "storykeep", "nah", "yorizon"} <= keys
+    # CDI-1041 — canonical bare slugs across the fleet.
+    assert {"casey-berlin", "cdit-works", "storykeep", "nah", "yorizon"} <= keys
 
 
-async def test_get_brand_context_known_key(client: Client):
+async def test_get_brand_context_canonical_key(client: Client):
+    result = await client.call_tool("get_brand_context", {"context": "casey-berlin"})
+    payload = _payload(result)
+    assert payload["context"] == "casey-berlin"
+    assert payload["rules"]
+
+
+async def test_get_brand_context_legacy_dot_form_still_works(client: Client):
+    # Legacy callers that still pass "casey.berlin" should resolve.
     result = await client.call_tool("get_brand_context", {"context": "casey.berlin"})
     payload = _payload(result)
-    assert payload["context"] == "casey.berlin"
+    assert payload["context"] == "casey-berlin"
     assert payload["rules"]
+
+
+async def test_get_brand_context_legacy_at_prefixed_works(client: Client):
+    # Legacy bildsprache "@cdit" form should resolve to cdit-works.
+    result = await client.call_tool("get_brand_context", {"context": "@cdit"})
+    payload = _payload(result)
+    assert payload["context"] == "cdit-works"
 
 
 async def test_get_brand_context_unknown_key_returns_error(client: Client):
@@ -114,11 +130,11 @@ async def test_get_brand_context_unknown_key_returns_error(client: Client):
 async def test_generate_text_context_merges_everything(client: Client):
     result = await client.call_tool(
         "generate_text_context",
-        {"context": "casey.berlin", "platform": "blog", "language": "en"},
+        {"context": "casey-berlin", "platform": "blog", "language": "en"},
     )
     payload = _payload(result)
     assert "voice_dna" in payload
-    assert payload["brand_context"]["name"] == "casey.berlin"
+    assert payload["brand_context"]["name"] == "casey-berlin"
     assert payload["platform_template"]["name"] == "blog"
     assert payload["language"] == "en"
 

@@ -16,6 +16,7 @@ from mcp_klartext import __version__
 from mcp_klartext.auth import BearerTokenVerifier
 from mcp_klartext.config import settings
 from mcp_klartext.platforms import load_platforms
+from mcp_klartext.brands import lookup_brand
 from mcp_klartext.references import (
     parse_frontmatter,
     references_from_frontmatter,
@@ -66,7 +67,10 @@ async def generate_text_context(
     + get_platform_template calls — it returns all three in one response.
 
     Args:
-        context: Brand context (@casey.berlin, @cdit-works, @storykeep, @nah, @yorizon).
+        context: Brand context. Canonical bare slug:
+                 ``casey-berlin``, ``cdit-works``, ``storykeep``, ``nah``,
+                 ``yorizon``. Legacy variants (``@cdit``, ``@casey.berlin``,
+                 ``cdit-works.de``, ...) are also accepted and normalised.
                  If omitted, returns voice DNA without brand-specific rules.
         platform: Target platform (linkedin-post, blog, newsletter, etc.).
                   If omitted, returns available platforms list.
@@ -82,9 +86,10 @@ async def generate_text_context(
         "brand_detection": voice_data.brand_detection,
     }
 
-    # Brand context
+    # Brand context — accepts canonical bare slugs and legacy variants
+    # (CDI-1041 cross-skill alignment).
     if context:
-        brand = voice_data.brands.get(context)
+        brand = lookup_brand(voice_data.brands, context)
         if brand:
             result["brand_context"] = {
                 "name": brand.name,
@@ -155,11 +160,14 @@ async def get_brand_context(context: str | None = None) -> dict:
     """[content] Get brand-specific voice, visual, and language settings.
 
     Args:
-        context: Specific brand to retrieve (@casey.berlin, @cdit-works,
-                 @storykeep, @nah, @yorizon). If omitted, returns all brands.
+        context: Specific brand to retrieve. Canonical bare slug:
+                 ``casey-berlin``, ``cdit-works``, ``storykeep``, ``nah``,
+                 ``yorizon``. Legacy variants (``@cdit``, ``@casey.berlin``,
+                 ``cdit-works.de``, ...) also accepted. If omitted, returns
+                 all brands.
     """
     if context:
-        brand = voice_data.brands.get(context)
+        brand = lookup_brand(voice_data.brands, context)
         if brand:
             return {
                 "context": brand.name,
