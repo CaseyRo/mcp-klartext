@@ -11,6 +11,11 @@ services:
       - FASTMCP_HOME=/data/fastmcp
     volumes:
       - fastmcp-data:/data/fastmcp
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   fastmcp-data:
