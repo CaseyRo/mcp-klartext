@@ -1,41 +1,26 @@
-"""Brand-slug normalisation (CDI-1041 cross-skill alignment).
+"""Brand-slug normalisation.
 
-Canonical form across the fleet (mcp-bildsprache, mcp-klartext, mcp-writings)
-is the **bare hyphenated slug**: ``casey-berlin``, ``cdit-works``,
-``storykeep``, ``nah``, ``yorizon``.
+Active brands (May 2026 brand collapse): ``casey`` and ``yorizon``. The
+former ``casey-berlin``, ``cdit-works``, ``storykeep``, and ``nah`` keys
+are no longer separate brands. Callers that pass legacy keys are routed
+to the migration error in ``server.py`` (``_REMOVED_BRANDS``) — this
+module's normalise/lookup paths only resolve the active brands.
 
-This repo's voice loader historically produced ``casey.berlin`` (dot) for
-Casey and ``cdit-works`` (bare slug) for CDiT — inconsistent with itself
-and with the other repos. The MCP tool surface accepts any variant; we
-normalise at the lookup boundary.
+The MCP tool surface accepts a few alias forms (`@casey`, `@yorizon`);
+unknown strings pass through unchanged so the upstream layer can decide
+whether to error or apply a removed-brand migration message.
 """
 
 from __future__ import annotations
 
 CANONICAL_BRANDS: tuple[str, ...] = (
-    "casey-berlin",
-    "cdit-works",
-    "storykeep",
-    "nah",
+    "casey",
     "yorizon",
 )
 
 _ALIASES: dict[str, str] = {
-    # Bildsprache historical (@-prefixed, dot-separated, abbreviated)
-    "@casey.berlin": "casey-berlin",
-    "casey.berlin": "casey-berlin",
-    "@cdit": "cdit-works",
-    "cdit": "cdit-works",
-    "@cdit-works": "cdit-works",
-    "@cdit.works": "cdit-works",
-    "cdit-works.de": "cdit-works",
-    "cdit.works": "cdit-works",
-    "@storykeep": "storykeep",
-    "@nah": "nah",
+    "@casey": "casey",
     "@yorizon": "yorizon",
-    # Underscored variants
-    "casey_berlin": "casey-berlin",
-    "cdit_works": "cdit-works",
 }
 
 

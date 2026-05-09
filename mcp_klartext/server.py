@@ -26,6 +26,43 @@ from mcp_klartext.references import (
 from mcp_klartext.scanner import scan_for_ai_tells
 from mcp_klartext.voice import load_voice_data
 
+# Brands that no longer exist as separate contexts (May 2026 collapse).
+# Surface a clear migration error rather than 'unknown brand'.
+_REMOVED_BRANDS: dict[str, str] = {
+    "casey-berlin": (
+        "Brand consolidated. Use brand='casey' with register='personal'."
+    ),
+    "casey.berlin": (
+        "Brand consolidated. Use brand='casey' with register='personal'."
+    ),
+    "casey_berlin": (
+        "Brand consolidated. Use brand='casey' with register='personal'."
+    ),
+    "cdit": (
+        "Brand consolidated. Use brand='casey' with register='professional'."
+    ),
+    "cdit-works": (
+        "Brand consolidated. Use brand='casey' with register='professional'."
+    ),
+    "cdit-works.de": (
+        "Brand consolidated. Use brand='casey' with register='professional'."
+    ),
+    "cdit_works": (
+        "Brand consolidated. Use brand='casey' with register='professional'."
+    ),
+    "cdit.works": (
+        "Brand consolidated. Use brand='casey' with register='professional'."
+    ),
+    "storykeep": (
+        "Brand removed. Author under brand='casey' with register='professional'."
+    ),
+    "nah": (
+        "Brand removed. Author under brand='casey' with register='professional'."
+    ),
+}
+
+_VALID_REGISTERS: tuple[str, ...] = ("personal", "professional")
+
 logger = logging.getLogger(__name__)
 
 # Load all content at startup
@@ -55,26 +92,32 @@ async def generate_text_context(
     context: str | None = None,
     platform: str | None = None,
     language: str | None = None,
+    register: Literal["personal", "professional"] | None = None,
     references: list[dict] | None = None,
 ) -> dict:
     """[content] Get complete writing context for brand-aware content generation.
 
-    Returns voice DNA rules, brand-specific settings, platform template,
-    bleed scan rules, and the Bildsprache handshake format — everything
-    an LLM needs to generate content in Casey's voice.
+    Returns voice DNA rules, brand-specific settings (with the appropriate
+    register overlay merged in), platform template, bleed scan rules, and
+    the Bildsprache handshake format — everything an LLM needs to generate
+    content in Casey's voice.
 
     Prefer this single call over separate get_voice_dna + get_brand_context
     + get_platform_template calls — it returns all three in one response.
 
     Args:
-        context: Brand context. Canonical bare slug:
-                 ``casey-berlin``, ``cdit-works``, ``storykeep``, ``nah``,
-                 ``yorizon``. Legacy variants (``@cdit``, ``@casey.berlin``,
-                 ``cdit-works.de``, ...) are also accepted and normalised.
-                 If omitted, returns voice DNA without brand-specific rules.
+        context: Brand context. Active brands (May 2026 collapse): ``casey``,
+                 ``yorizon``. Legacy variants (``casey-berlin``, ``cdit-works``,
+                 ``cdit-works.de``, ``storykeep``, ``nah``, ...) return a
+                 migration error pointing at the correct ``casey`` + register
+                 combination. If omitted, returns voice DNA without
+                 brand-specific rules.
         platform: Target platform (linkedin-post, blog, newsletter, etc.).
                   If omitted, returns available platforms list.
         language: Target language (en, de, nl). Affects trilingual workflow rules.
+        register: For ``brand='casey'`` only. ``personal`` (recognition,
+                  manifesto-adjacent voice) or ``professional`` (verification,
+                  workshop voice). Yorizon does not use registers.
         references: Optional list of source references the caller is drafting
                     against. Each entry: {type: "stolperstein"|"url"|"document",
                     id?, href?, sha256?, title?}. Klartext is stateless — it
@@ -86,26 +129,69 @@ async def generate_text_context(
         "brand_detection": voice_data.brand_detection,
     }
 
-    # Brand context — accepts canonical bare slugs and legacy variants
-    # (CDI-1041 cross-skill alignment).
     if context:
-        brand = lookup_brand(voice_data.brands, context)
-        if brand:
+        # Removed/consolidated brands → migration message instead of
+        # "unknown brand context", so callers know how to fix themselves.
+        cleaned = context.strip().lstrip("@").lower()
+        if cleaned in _REMOVED_BRANDS:
             result["brand_context"] = {
-                "name": brand.name,
-                "rules": brand.content,
+                "error": _REMOVED_BRANDS[cleaned],
+                "removed": cleaned,
+                "active": ["casey", "yorizon"],
             }
         else:
-            result["brand_context"] = {
-                "error": f"Unknown brand context: {context}",
-                "available": list(voice_data.brands.keys()),
-            }
+            brand = lookup_brand(voice_data.brands, context)
+            if brand:
+                if register and brand.name != "casey":
+                    result["brand_context"] = {
+                        "error": (
+                            f"Brand '{brand.name}' does not use registers. "
+                            "Omit the register argument."
+                        ),
+                    }
+                elif register and register not in _VALID_REGISTERS:
+                    result["brand_context"] = {
+                        "error": (
+                            f"Unknown register '{register}'. "
+                            f"Valid: {list(_VALID_REGISTERS)}"
+                        ),
+                    }
+                else:
+                    payload: dict = {
+                        "name": brand.name,
+                        "rules": brand.content,
+                    }
+                    if register and brand.registers.get(register):
+                        payload["register"] = register
+                        payload["register_overlay"] = brand.registers[register].content
+                    elif brand.name == "casey" and not register:
+                        payload["register_required"] = True
+                        payload["register_options"] = list(_VALID_REGISTERS)
+                        payload["hint"] = (
+                            "Casey brand needs a register. Pass "
+                            "register='personal' or register='professional', "
+                            "or include @casey/personal or @casey/professional "
+                            "in the prompt."
+                        )
+                    result["brand_context"] = payload
+            else:
+                result["brand_context"] = {
+                    "error": f"Unknown brand context: {context}",
+                    "available": list(voice_data.brands.keys()),
+                }
     else:
         result["brand_context"] = {
             "missing": True,
             "hint": "No brand context specified. Available brands:",
             "available": [
-                {"key": k, "name": v.name} for k, v in voice_data.brands.items()
+                {
+                    "key": k,
+                    "name": v.name,
+                    "registers": (
+                        list(v.registers.keys()) if v.registers else None
+                    ),
+                }
+                for k, v in voice_data.brands.items()
             ],
         }
 
@@ -156,23 +242,58 @@ async def get_voice_dna() -> dict:
 
 
 @mcp.tool
-async def get_brand_context(context: str | None = None) -> dict:
+async def get_brand_context(
+    context: str | None = None,
+    register: Literal["personal", "professional"] | None = None,
+) -> dict:
     """[content] Get brand-specific voice, visual, and language settings.
 
+    Active brands (May 2026 collapse): ``casey``, ``yorizon``.
+
     Args:
-        context: Specific brand to retrieve. Canonical bare slug:
-                 ``casey-berlin``, ``cdit-works``, ``storykeep``, ``nah``,
-                 ``yorizon``. Legacy variants (``@cdit``, ``@casey.berlin``,
-                 ``cdit-works.de``, ...) also accepted. If omitted, returns
-                 all brands.
+        context: Specific brand to retrieve. Active brands: ``casey``,
+                 ``yorizon``. Legacy keys (``casey-berlin``, ``cdit-works``,
+                 ``storykeep``, ``nah``, ...) return a migration error
+                 pointing at the correct ``casey`` + register combination.
+                 If omitted, returns all active brands.
+        register: For ``brand='casey'`` only. ``personal`` or ``professional``.
+                  When provided, the response includes the register overlay
+                  alongside the shared brand rules.
     """
     if context:
+        cleaned = context.strip().lstrip("@").lower()
+        if cleaned in _REMOVED_BRANDS:
+            return {
+                "error": _REMOVED_BRANDS[cleaned],
+                "removed": cleaned,
+                "active": ["casey", "yorizon"],
+            }
         brand = lookup_brand(voice_data.brands, context)
         if brand:
-            return {
+            if register and brand.name != "casey":
+                return {
+                    "error": (
+                        f"Brand '{brand.name}' does not use registers. "
+                        "Omit the register argument."
+                    ),
+                }
+            if register and register not in _VALID_REGISTERS:
+                return {
+                    "error": (
+                        f"Unknown register '{register}'. "
+                        f"Valid: {list(_VALID_REGISTERS)}"
+                    ),
+                }
+            payload: dict = {
                 "context": brand.name,
                 "rules": brand.content,
             }
+            if brand.registers:
+                payload["registers"] = list(brand.registers.keys())
+            if register and brand.registers.get(register):
+                payload["register"] = register
+                payload["register_overlay"] = brand.registers[register].content
+            return payload
         return {
             "error": f"Unknown brand context: {context}",
             "available": list(voice_data.brands.keys()),
@@ -180,7 +301,14 @@ async def get_brand_context(context: str | None = None) -> dict:
 
     return {
         "brands": [
-            {"key": k, "name": v.name, "preview": v.content[:200]}
+            {
+                "key": k,
+                "name": v.name,
+                "preview": v.content[:200],
+                "registers": (
+                    list(v.registers.keys()) if v.registers else None
+                ),
+            }
             for k, v in voice_data.brands.items()
         ],
     }
@@ -233,19 +361,26 @@ async def get_platform_template(
 
 
 @mcp.tool
-async def scan_draft(text: str) -> dict:
+async def scan_draft(text: str, brand: str | None = None) -> dict:
     """[content] Scan a draft for AI-tell patterns before finalizing it.
 
     Implements the AI Bleed Scan rubric (see voice DNA) programmatically.
     Run this after generating a draft and before emitting the final Output
     Format block. If `clean` is false, rewrite the flagged spans and re-scan.
 
+    Args:
+        text: The draft markdown to scan.
+        brand: Optional brand context. When ``brand='casey'``, the May 2026
+               hard rules apply (no em-dashes, no all-caps, anti-anchor
+               proximity). Other brands run only the generic AI-tell checks.
+
     Returns:
         issues: list of {category, pattern, match, line, severity, suggestion}
         stats: {word_count, em_dash_count, em_dash_budget, high/medium/low counts}
+        brand: the brand argument echoed back
         clean: true iff no high or medium severity hits
     """
-    return scan_for_ai_tells(text)
+    return scan_for_ai_tells(text, brand=brand)
 
 
 @mcp.tool

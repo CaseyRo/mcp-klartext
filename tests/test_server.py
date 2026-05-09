@@ -94,30 +94,63 @@ async def test_get_brand_context_lists_brands_when_omitted(client: Client):
     result = await client.call_tool("get_brand_context", {})
     payload = _payload(result)
     keys = {b["key"] for b in payload["brands"]}
-    # CDI-1041 — canonical bare slugs across the fleet.
-    assert {"casey-berlin", "cdit-works", "storykeep", "nah", "yorizon"} <= keys
+    # May 2026 brand collapse: active brands are casey + yorizon.
+    assert keys == {"casey", "yorizon"}
 
 
-async def test_get_brand_context_canonical_key(client: Client):
-    result = await client.call_tool("get_brand_context", {"context": "casey-berlin"})
+async def test_get_brand_context_casey_canonical_key(client: Client):
+    result = await client.call_tool("get_brand_context", {"context": "casey"})
     payload = _payload(result)
-    assert payload["context"] == "casey-berlin"
+    assert payload["context"] == "casey"
     assert payload["rules"]
+    # casey advertises both registers.
+    assert set(payload["registers"]) == {"personal", "professional"}
 
 
-async def test_get_brand_context_legacy_dot_form_still_works(client: Client):
-    # Legacy callers that still pass "casey.berlin" should resolve.
-    result = await client.call_tool("get_brand_context", {"context": "casey.berlin"})
+async def test_get_brand_context_casey_with_register(client: Client):
+    result = await client.call_tool(
+        "get_brand_context", {"context": "casey", "register": "personal"}
+    )
     payload = _payload(result)
-    assert payload["context"] == "casey-berlin"
-    assert payload["rules"]
+    assert payload["context"] == "casey"
+    assert payload["register"] == "personal"
+    assert payload["register_overlay"]
 
 
-async def test_get_brand_context_legacy_at_prefixed_works(client: Client):
-    # Legacy bildsprache "@cdit" form should resolve to cdit-works.
+async def test_get_brand_context_legacy_casey_berlin_returns_migration(client: Client):
+    # casey-berlin → migration error pointing at casey + register=personal.
+    result = await client.call_tool(
+        "get_brand_context", {"context": "casey-berlin"}
+    )
+    payload = _payload(result)
+    assert "error" in payload
+    assert "casey" in payload["error"]
+    assert "personal" in payload["error"]
+    assert payload["active"] == ["casey", "yorizon"]
+
+
+async def test_get_brand_context_legacy_cdit_returns_migration(client: Client):
     result = await client.call_tool("get_brand_context", {"context": "@cdit"})
     payload = _payload(result)
-    assert payload["context"] == "cdit-works"
+    assert "error" in payload
+    assert "casey" in payload["error"]
+    assert "professional" in payload["error"]
+
+
+async def test_get_brand_context_legacy_storykeep_returns_migration(client: Client):
+    result = await client.call_tool("get_brand_context", {"context": "storykeep"})
+    payload = _payload(result)
+    assert "error" in payload
+    assert "casey" in payload["error"]
+
+
+async def test_get_brand_context_yorizon_register_rejected(client: Client):
+    result = await client.call_tool(
+        "get_brand_context", {"context": "yorizon", "register": "personal"}
+    )
+    payload = _payload(result)
+    assert "error" in payload
+    assert "register" in payload["error"]
 
 
 async def test_get_brand_context_unknown_key_returns_error(client: Client):
@@ -130,13 +163,42 @@ async def test_get_brand_context_unknown_key_returns_error(client: Client):
 async def test_generate_text_context_merges_everything(client: Client):
     result = await client.call_tool(
         "generate_text_context",
-        {"context": "casey-berlin", "platform": "blog", "language": "en"},
+        {
+            "context": "casey",
+            "register": "professional",
+            "platform": "blog",
+            "language": "en",
+        },
     )
     payload = _payload(result)
     assert "voice_dna" in payload
-    assert payload["brand_context"]["name"] == "casey-berlin"
+    assert payload["brand_context"]["name"] == "casey"
+    assert payload["brand_context"]["register"] == "professional"
+    assert payload["brand_context"]["register_overlay"]
     assert payload["platform_template"]["name"] == "blog"
     assert payload["language"] == "en"
+
+
+async def test_generate_text_context_casey_without_register_hints(client: Client):
+    result = await client.call_tool(
+        "generate_text_context",
+        {"context": "casey", "platform": "blog"},
+    )
+    payload = _payload(result)
+    bc = payload["brand_context"]
+    assert bc["name"] == "casey"
+    assert bc.get("register_required") is True
+    assert set(bc["register_options"]) == {"personal", "professional"}
+
+
+async def test_generate_text_context_legacy_brand_returns_migration(client: Client):
+    result = await client.call_tool(
+        "generate_text_context",
+        {"context": "cdit-works", "platform": "blog"},
+    )
+    payload = _payload(result)
+    assert "error" in payload["brand_context"]
+    assert "casey" in payload["brand_context"]["error"]
 
 
 async def test_generate_text_context_hints_when_context_missing(client: Client):

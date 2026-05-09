@@ -162,3 +162,87 @@ def test_clean_flag_true_with_only_low_severity():
     non_low = [i for i in result["issues"] if i["severity"] != "low"]
     if not non_low:
         assert result["clean"] is True
+
+
+# -- May 2026 casey hard rules ----------------------------------------------
+
+
+def test_casey_rule_no_em_dash_flagged():
+    result = scan_for_ai_tells(
+        "I learned to code on my dad's lap — and it changed me.",
+        brand="casey",
+    )
+    assert "NO_EM_DASH" in _patterns(result)
+    assert any(
+        i["severity"] == "high" and i["pattern"] == "NO_EM_DASH"
+        for i in result["issues"]
+    )
+    assert result["clean"] is False
+
+
+def test_casey_rule_em_dash_zero_budget():
+    # A single em-dash in long text is fine under the legacy budget heuristic.
+    # Under casey rules, even one is an error.
+    text = " ".join(["lorem ipsum"] * 200) + " — and that's fine?"
+    result_legacy = scan_for_ai_tells(text)
+    result_casey = scan_for_ai_tells(text, brand="casey")
+
+    # Legacy: single em-dash is within budget, no em_dash issues raised.
+    assert all(i["category"] != "em_dash" for i in result_legacy["issues"])
+    # Casey: NO_EM_DASH fires on the single em-dash.
+    assert "NO_EM_DASH" in _patterns(result_casey)
+
+
+def test_casey_rule_no_all_caps_flagged():
+    result = scan_for_ai_tells("This is REALLY important.", brand="casey")
+    assert "NO_ALL_CAPS" in _patterns(result)
+    assert any(
+        i["match"] == "REALLY" for i in result["issues"]
+    )
+
+
+def test_casey_rule_all_caps_acronym_whitelist():
+    result = scan_for_ai_tells(
+        "The MCP server exposes a REST API over HTTPS.", brand="casey"
+    )
+    # Whitelisted acronyms should not trip NO_ALL_CAPS.
+    no_caps_issues = [i for i in result["issues"] if i["pattern"] == "NO_ALL_CAPS"]
+    assert no_caps_issues == []
+
+
+def test_casey_rule_anti_anchor_proximity_musk():
+    result = scan_for_ai_tells(
+        "Like Elon Musk says, you have to disrupt everything.", brand="casey"
+    )
+    assert "ANTI_ANCHOR_PROXIMITY" in _patterns(result)
+    assert any(
+        "Musk" in i["match"] and i["severity"] == "medium"
+        for i in result["issues"]
+    )
+
+
+def test_casey_rule_anti_anchor_proximity_supercharge_pattern():
+    result = scan_for_ai_tells(
+        "We'll supercharge your productivity 10x with this tool.",
+        brand="casey",
+    )
+    patterns = _patterns(result)
+    assert "ANTI_ANCHOR_PROXIMITY" in patterns
+
+
+def test_casey_rules_do_not_apply_without_brand():
+    # Same text without brand="casey" only triggers generic rules, not the
+    # casey-specific ones.
+    text = "This is REALLY important — just so you know."
+    result = scan_for_ai_tells(text)
+    patterns = _patterns(result)
+    assert "NO_EM_DASH" not in patterns
+    assert "NO_ALL_CAPS" not in patterns
+
+
+def test_casey_brand_echoed_in_result():
+    result = scan_for_ai_tells("clean text", brand="casey")
+    assert result["brand"] == "casey"
+
+    result_no_brand = scan_for_ai_tells("clean text")
+    assert result_no_brand["brand"] is None

@@ -117,12 +117,129 @@ PHRASE_TELLS: list[tuple[str, str, str]] = [
 
 @dataclass
 class Issue:
-    category: str  # "lexical" | "phrase" | "structural" | "em_dash"
+    category: str  # "lexical" | "phrase" | "structural" | "em_dash" | "casey_rule"
     pattern: str
     match: str
     line: int
     severity: str  # "high" | "medium" | "low"
     suggestion: str
+
+
+# Anti-anchor names from the May 2026 brand-decisions doc. Proximity is a
+# warning-tier signal — not a hard ban — because authors may quote or
+# critique these figures occasionally. The scanner flags them so authors
+# can confirm the reference is intentional.
+_ANTI_ANCHORS: tuple[tuple[str, str], ...] = (
+    (r"\bElon\s+Musk\b", "Musk reference"),
+    (r"\bSam\s+Altman\b", "Altman reference"),
+    # OpenAI marketing tone proximity — name only flagged when it appears
+    # in an enthusiastic / promotional context. Word-boundary alone would
+    # over-flag; we leave OpenAI generally and flag the marketing patterns
+    # below instead.
+)
+_ANTI_ANCHOR_PHRASE_TELLS: tuple[tuple[str, str], ...] = (
+    (
+        r"\bsupercharg(?:e|es|ed|ing)\s+\w+",
+        "supercharge — OpenAI marketing pattern",
+    ),
+    (
+        r"\b(?:10x|10\s*x)\s+(?:productivity|output|results?)\b",
+        "10x productivity — tech-bro pattern",
+    ),
+)
+
+
+def _find_casey_rule_issues(text: str) -> list[Issue]:
+    """Hard rules from the May 2026 brand-decisions doc, applied to casey output.
+
+    - NO_EM_DASH: any em-dash is an error.
+    - NO_ALL_CAPS: 3+ consecutive uppercase letters (excluding URLs / acronym
+      whitelist) is an error.
+    - ANTI_ANCHOR_PROXIMITY: warning when an anti-anchor figure or pattern
+      appears.
+    """
+    issues: list[Issue] = []
+
+    for m in re.finditer(r"—", text):
+        issues.append(
+            Issue(
+                category="casey_rule",
+                pattern="NO_EM_DASH",
+                match="—",
+                line=_line_number(text, m.start()),
+                severity="high",
+                suggestion=(
+                    "Hard rule: no em-dashes in Casey voice. Use a colon, "
+                    "comma, semicolon, period, or parentheses."
+                ),
+            )
+        )
+
+    # All-caps words longer than 2 characters. Strip URLs first so we
+    # don't flag https://, .COM, etc.
+    no_urls = re.sub(r"https?://\S+", "", text)
+    for m in re.finditer(r"\b[A-Z]{3,}\b", no_urls):
+        token = m.group(0)
+        if token in _ALL_CAPS_WHITELIST:
+            continue
+        issues.append(
+            Issue(
+                category="casey_rule",
+                pattern="NO_ALL_CAPS",
+                match=token,
+                line=_line_number(no_urls, m.start()),
+                severity="high",
+                suggestion=(
+                    "Hard rule: no all-caps in Casey voice. Use weight or "
+                    "italic for emphasis instead."
+                ),
+            )
+        )
+
+    for pattern, label in _ANTI_ANCHORS:
+        for m in re.finditer(pattern, text, re.IGNORECASE):
+            issues.append(
+                Issue(
+                    category="casey_rule",
+                    pattern="ANTI_ANCHOR_PROXIMITY",
+                    match=m.group(0),
+                    line=_line_number(text, m.start()),
+                    severity="medium",
+                    suggestion=(
+                        f"Anti-anchor: {label}. If reference is intentional "
+                        "(quote/critique), confirm tone. Otherwise rewrite."
+                    ),
+                )
+            )
+
+    for pattern, label in _ANTI_ANCHOR_PHRASE_TELLS:
+        for m in re.finditer(pattern, text, re.IGNORECASE):
+            issues.append(
+                Issue(
+                    category="casey_rule",
+                    pattern="ANTI_ANCHOR_PROXIMITY",
+                    match=m.group(0),
+                    line=_line_number(text, m.start()),
+                    severity="medium",
+                    suggestion=(
+                        f"Anti-anchor pattern: {label}. Rewrite without "
+                        "tech-bro / OpenAI-marketing framing."
+                    ),
+                )
+            )
+
+    return issues
+
+
+_ALL_CAPS_WHITELIST: frozenset[str] = frozenset({
+    "AI", "API", "MCP", "DNS", "URL", "URLS", "HTTP", "HTTPS", "CSS", "HTML",
+    "JSON", "YAML", "TOML", "PDF", "PNG", "JPG", "WEBP", "SVG", "GPU", "CPU",
+    "RAM", "SQL", "REST", "RPC", "JWT", "OAUTH", "SSO", "TLS", "SSH", "VPN",
+    "SDK", "CLI", "GUI", "UI", "UX", "OS", "FAQ", "ROI", "KPI", "OKR",
+    "B2B", "B2C", "DACH", "EU", "DE", "EN", "NL", "USD", "EUR", "GBP",
+    "PR", "CI", "CD", "CTO", "CEO", "PO", "PM", "QA", "DR", "SRE",
+    "GDPR", "DSGVO", "BSI", "NIS2", "ISO", "AGB",
+})
 
 
 def _word_count(text: str) -> int:
@@ -309,7 +426,7 @@ _AI_CAPTION_MARKERS = re.compile(
 )
 
 
-def scan_for_ai_tells(text: str) -> dict:
+def scan_for_ai_tells(text: str, brand: str | None = None) -> dict:
     """Run the AI Bleed Scan rubric on a draft.
 
     Returns a dict with issues, stats, and a `clean` boolean indicating
@@ -318,6 +435,13 @@ def scan_for_ai_tells(text: str) -> dict:
     When the input has YAML frontmatter, the scan also runs attribution
     checks (NO_READMORE, UNCAPTIONED_AI_IMAGE) against the body, and the
     result includes an `attribution` diagnostics block.
+
+    Args:
+        text: The draft markdown to scan.
+        brand: Optional brand context. When ``brand="casey"``, the May 2026
+               hard rules apply (no em-dashes, no all-caps, anti-anchor
+               proximity warnings). Other brands run only the generic
+               AI-tell checks.
     """
     meta, body = parse_frontmatter(text)
     # For all other checks we scan the full text; body-only for image detection.
@@ -325,9 +449,18 @@ def scan_for_ai_tells(text: str) -> dict:
 
     word_count = _word_count(scannable)
 
-    em_dash_issues, em_dash_count, em_dash_budget = _find_em_dash_issues(
-        scannable, word_count
-    )
+    # Em-dash handling: under the May 2026 hard rules, casey output gets a
+    # zero-tolerance NO_EM_DASH check. Other brands keep the existing
+    # budget-based heuristic.
+    if brand == "casey":
+        em_dash_issues: list[Issue] = []
+        em_dash_count = sum(1 for _ in re.finditer(r"—", scannable))
+        em_dash_budget = 0
+    else:
+        em_dash_issues, em_dash_count, em_dash_budget = _find_em_dash_issues(
+            scannable, word_count
+        )
+
     lexical_issues = _find_lexical_issues(scannable)
     phrase_issues = _find_phrase_issues(scannable)
     structural_issues = _find_adjective_stacks(scannable) + _find_repeated_sentence_openers(
@@ -336,6 +469,7 @@ def scan_for_ai_tells(text: str) -> dict:
     attribution_issues, attribution_diagnostics = _find_attribution_issues(
         text, body if meta else text, meta
     )
+    casey_issues = _find_casey_rule_issues(scannable) if brand == "casey" else []
 
     issues = (
         lexical_issues
@@ -343,6 +477,7 @@ def scan_for_ai_tells(text: str) -> dict:
         + em_dash_issues
         + structural_issues
         + attribution_issues
+        + casey_issues
     )
     issues.sort(key=lambda i: (i.line, i.category))
 
@@ -360,5 +495,6 @@ def scan_for_ai_tells(text: str) -> dict:
             "low": sum(1 for i in issues if i.severity == "low"),
         },
         "attribution": attribution_diagnostics,
+        "brand": brand,
         "clean": len(blocking) == 0,
     }

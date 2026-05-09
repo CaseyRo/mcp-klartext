@@ -1,4 +1,4 @@
-"""Tests for brand-slug normalisation (CDI-1041 cross-skill alignment)."""
+"""Tests for brand-slug normalisation (May 2026 brand collapse)."""
 
 from __future__ import annotations
 
@@ -15,22 +15,12 @@ class TestNormalizeBrand:
     @pytest.mark.parametrize(
         "alias,canonical",
         [
-            ("@casey.berlin", "casey-berlin"),
-            ("casey.berlin", "casey-berlin"),
-            ("@cdit", "cdit-works"),
-            ("cdit", "cdit-works"),
-            ("@cdit-works", "cdit-works"),
-            ("@cdit.works", "cdit-works"),
-            ("cdit-works.de", "cdit-works"),
-            ("cdit.works", "cdit-works"),
-            ("@storykeep", "storykeep"),
-            ("@nah", "nah"),
+            # @-prefixed variants resolve to active brand keys.
+            ("@casey", "casey"),
             ("@yorizon", "yorizon"),
-            ("casey_berlin", "casey-berlin"),
-            ("cdit_works", "cdit-works"),
-            # Already canonical
-            ("casey-berlin", "casey-berlin"),
-            ("cdit-works", "cdit-works"),
+            # Already canonical.
+            ("casey", "casey"),
+            ("yorizon", "yorizon"),
         ],
     )
     def test_known_aliases(self, alias: str, canonical: str) -> None:
@@ -40,12 +30,15 @@ class TestNormalizeBrand:
         assert normalize_brand(None) is None
 
     def test_unknown_passes_through(self) -> None:
+        # Removed brands (casey-berlin, cdit-works, storykeep, nah) and
+        # any other unknown string pass through unchanged. The server
+        # layer's _REMOVED_BRANDS map handles the migration message.
+        assert normalize_brand("casey-berlin") == "casey-berlin"
         assert normalize_brand("totally-unknown") == "totally-unknown"
 
-    def test_canonical_brands_are_complete(self) -> None:
-        # The brand-detection map and the brand md files should align.
-        expected = {"casey-berlin", "cdit-works", "storykeep", "nah", "yorizon"}
-        assert set(CANONICAL_BRANDS) == expected
+    def test_canonical_brands_are_active_only(self) -> None:
+        # May 2026 brand collapse: only casey + yorizon remain.
+        assert set(CANONICAL_BRANDS) == {"casey", "yorizon"}
 
 
 class TestLookupBrand:
@@ -54,29 +47,33 @@ class TestLookupBrand:
         from mcp_klartext.voice import BrandContext
 
         return {
-            "casey-berlin": BrandContext(name="casey-berlin", content="casey rules"),
-            "cdit-works": BrandContext(name="cdit-works", content="cdit rules"),
+            "casey": BrandContext(name="casey", content="casey rules"),
+            "yorizon": BrandContext(name="yorizon", content="yorizon rules"),
         }
 
-    def test_canonical_lookup(self, brands_dict):
-        b = lookup_brand(brands_dict, "casey-berlin")
+    def test_canonical_lookup_casey(self, brands_dict):
+        b = lookup_brand(brands_dict, "casey")
         assert b.content == "casey rules"
 
-    def test_legacy_dot_form_resolves(self, brands_dict):
-        b = lookup_brand(brands_dict, "casey.berlin")
+    def test_canonical_lookup_yorizon(self, brands_dict):
+        b = lookup_brand(brands_dict, "yorizon")
+        assert b.content == "yorizon rules"
+
+    def test_at_prefixed_casey_resolves(self, brands_dict):
+        b = lookup_brand(brands_dict, "@casey")
         assert b.content == "casey rules"
 
-    def test_legacy_at_prefixed_form_resolves(self, brands_dict):
-        b = lookup_brand(brands_dict, "@casey.berlin")
-        assert b.content == "casey rules"
+    def test_at_prefixed_yorizon_resolves(self, brands_dict):
+        b = lookup_brand(brands_dict, "@yorizon")
+        assert b.content == "yorizon rules"
 
-    def test_legacy_cdit_abbreviation_resolves(self, brands_dict):
-        b = lookup_brand(brands_dict, "@cdit")
-        assert b.content == "cdit rules"
-
-    def test_legacy_cdit_works_de_resolves(self, brands_dict):
-        b = lookup_brand(brands_dict, "cdit-works.de")
-        assert b.content == "cdit rules"
+    def test_removed_brand_returns_none(self, brands_dict):
+        # Removed brands no longer resolve — the server layer's
+        # _REMOVED_BRANDS map intercepts before this lookup.
+        assert lookup_brand(brands_dict, "casey-berlin") is None
+        assert lookup_brand(brands_dict, "cdit-works") is None
+        assert lookup_brand(brands_dict, "storykeep") is None
+        assert lookup_brand(brands_dict, "nah") is None
 
     def test_unknown_returns_none(self, brands_dict):
         assert lookup_brand(brands_dict, "nope") is None

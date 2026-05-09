@@ -36,11 +36,21 @@ Use ONE — never throat-clear with preamble. First sentence ≤12 words.
 
 ### Sentence Architecture
 
-- **Default:** 8-18 words. Short punches after longer flows. Rhythm: long-short-short.
+- **Default:** 8–18 words. Short punches after longer flows. Rhythm: long-short-short.
 - **Periods** for punch. **Colons** for payoffs. **Fragments** as standalone paragraphs.
-- **Em-dashes** only when a comma or period genuinely won't carry the pivot — max one per paragraph, never more than two in a row across a piece. Em-dashes peppered through a draft are the single strongest AI tell in 2026; a reader who clocks it stops reading.
+- **No em-dashes.** Hard rule for `casey` brand (May 2026 brand-decisions). Use a colon, comma, semicolon, period, or parentheses. The `scan_draft` tool flags any em-dash as a high-severity error when `brand="casey"`.
 - **Three-part lists** with genuine escalation (each item adds weight). Two cosmetic tricolons in a row reads as AI. Break the pattern by the third paragraph.
-- **Parentheticals** for self-aware asides — sparingly. One per piece, tops.
+- **Parentheticals** for self-aware asides, sparingly. One per piece, tops.
+
+### Hard Rules (May 2026, casey brand)
+
+These rules are enforced by `scan_draft(brand="casey")`. Violations are blocking errors.
+
+- **No em-dashes** anywhere. Use a colon, comma, semicolon, period, or parentheses.
+- **No all-caps** anywhere. No exceptions. Use weight or italic for emphasis. (Standard tech acronyms like API, MCP, GDPR are whitelisted.)
+- **Load-bearing words** used sparingly, each appearing once or twice in a longer piece, never as filler: `time`, `simplicity`, `craft`, `sacred`.
+- **Anchor references** (proximity = signal of fit): Patagonia (primary), Apple (careful innovation), Anthropic (thoughtfulness).
+- **Anti-anchors** (proximity = warning): Elon Musk personal brand, Sam Altman / OpenAI marketing tone, parts of NVIDIA, parts of Microsoft. The scanner warns on `Musk`, `Altman`, `supercharge X`, `10x productivity` patterns.
 
 ### Signature Moves
 

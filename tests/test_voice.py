@@ -80,11 +80,8 @@ def test_extract_returns_empty_when_section_missing():
 
 
 def test_brand_key_known_mappings():
-    # CDI-1041: canonical bare-slug form across the fleet.
-    assert _brand_key("casey-berlin.md") == "casey-berlin"
-    assert _brand_key("cdit-works.md") == "cdit-works"
-    assert _brand_key("storykeep.md") == "storykeep"
-    assert _brand_key("nah.md") == "nah"
+    # May 2026 brand collapse: active brand keys are casey + yorizon.
+    assert _brand_key("casey.md") == "casey"
     assert _brand_key("yorizon.md") == "yorizon"
 
 
@@ -104,10 +101,17 @@ def test_load_voice_data_from_bundled_files():
     assert data.brand_detection, "brand detection rules should not be empty"
     assert "Override Tags" in data.brand_detection
 
-    # CDI-1041 — canonical bare-slug form across the fleet.
-    expected_brands = {"casey-berlin", "cdit-works", "storykeep", "nah", "yorizon"}
+    # May 2026 brand collapse: only casey + yorizon exist.
+    expected_brands = {"casey", "yorizon"}
     assert set(data.brands) == expected_brands
 
     for key, brand in data.brands.items():
         assert brand.name == key
         assert brand.content, f"brand {key} has empty content"
+
+    # casey advertises both registers; yorizon has none.
+    assert set(data.brands["casey"].registers.keys()) == {
+        "personal",
+        "professional",
+    }
+    assert data.brands["yorizon"].registers == {}

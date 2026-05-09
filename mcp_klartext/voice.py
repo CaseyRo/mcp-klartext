@@ -12,9 +12,20 @@ DATA_DIR = Path(__file__).parent / "data"
 
 
 @dataclass
+class RegisterContext:
+    """A register overlay on the shared casey voice (personal | professional)."""
+
+    name: str
+    content: str
+
+
+@dataclass
 class BrandContext:
     name: str
     content: str
+    # Registers are an additive overlay over `content`, used by the casey
+    # brand only (May 2026 brand collapse). Empty for Yorizon.
+    registers: dict[str, RegisterContext] = field(default_factory=dict)
 
 
 @dataclass
@@ -141,12 +152,64 @@ def _extract_ai_bleed_scan(skill_content: str) -> str:
 def _brand_key(filename: str) -> str:
     """Convert a brand-file name to its canonical bare-slug context key.
 
-    CDI-1041: filenames already match the canonical form
-    (``casey-berlin.md`` → ``casey-berlin``); we just strip the extension.
-    Historical mapping that produced ``casey.berlin`` (with dot) has been
-    retired in favour of fleet-wide canonical bare slugs.
+    May 2026 brand collapse: ``casey-berlin`` and ``cdit-works`` merged
+    into ``casey`` with two registers. ``storykeep`` and ``nah`` removed.
+    Active brand keys: ``casey``, ``yorizon``.
     """
     return filename.replace(".md", "")
+
+
+def _extract_registers(brand_content: str) -> dict[str, RegisterContext]:
+    """Parse the optional ``## Registers`` section from a brand file.
+
+    Looks for ``### <name>`` subsections under the H2 ``## Registers``
+    block and returns each as a RegisterContext. The ``casey`` brand
+    uses this to declare the ``personal`` and ``professional`` overlays.
+    Yorizon and any other brand without this section returns ``{}``.
+    """
+    lines = brand_content.split("\n")
+    registers: dict[str, RegisterContext] = {}
+    in_registers = False
+    current_name: str | None = None
+    current_lines: list[str] = []
+
+    def _flush() -> None:
+        nonlocal current_name, current_lines
+        if current_name:
+            registers[current_name] = RegisterContext(
+                name=current_name,
+                content="\n".join(current_lines).strip(),
+            )
+        current_name = None
+        current_lines = []
+
+    for line in lines:
+        if line.startswith("## Registers"):
+            in_registers = True
+            continue
+        if in_registers and line.startswith("## ") and not line.startswith("## Registers"):
+            # Left the Registers section.
+            _flush()
+            in_registers = False
+            continue
+        if in_registers and line.startswith("### "):
+            _flush()
+            # Take only the first whitespace-delimited token as the key
+            # ("personal — recognition surface" → "personal").
+            header = line[4:].strip()
+            current_name = header.split(None, 1)[0].rstrip(":,—-")
+            current_lines = [line]
+            continue
+        if in_registers and current_name is not None:
+            current_lines.append(line)
+
+    if in_registers:
+        _flush()
+
+    # Filter to known register names so a typo in the brand file doesn't
+    # silently expose a bogus register via the API.
+    valid = {k: v for k, v in registers.items() if k in ("personal", "professional")}
+    return valid
 
 
 def load_voice_data() -> VoiceData:
@@ -189,8 +252,20 @@ def load_voice_data() -> VoiceData:
         for brand_file in sorted(brands_dir.glob("*.md")):
             key = _brand_key(brand_file.name)
             content = brand_file.read_text().strip()
-            data.brands[key] = BrandContext(name=key, content=content)
-            logger.info("Loaded brand context: %s", key)
+            registers = _extract_registers(content)
+            data.brands[key] = BrandContext(
+                name=key,
+                content=content,
+                registers=registers,
+            )
+            if registers:
+                logger.info(
+                    "Loaded brand context: %s (registers: %s)",
+                    key,
+                    ", ".join(sorted(registers.keys())),
+                )
+            else:
+                logger.info("Loaded brand context: %s", key)
     else:
         logger.warning("brands/ directory not found at %s", brands_dir)
 
