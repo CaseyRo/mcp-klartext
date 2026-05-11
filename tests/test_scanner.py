@@ -210,6 +210,22 @@ def test_casey_rule_all_caps_acronym_whitelist():
     assert no_caps_issues == []
 
 
+def test_casey_rule_technical_acronym_whitelist_post_smoke():
+    """Brand-collapse smoke 2026-05-11: technical acronyms surfaced in
+    engineering-flavoured drafts. After expanding the whitelist they must
+    not trip NO_ALL_CAPS."""
+    text = (
+        "We rolled off FLUX and BFL onto OpenAI, kept OIDC for portal auth, "
+        "shipped the README, swapped LLM providers, served MKB clients with "
+        "XLIFF round-trips, and kept the TM in sync."
+    )
+    result = scan_for_ai_tells(text, brand="casey")
+    no_caps_issues = [i for i in result["issues"] if i["pattern"] == "NO_ALL_CAPS"]
+    assert no_caps_issues == [], (
+        f"unexpected NO_ALL_CAPS hits: {[i['match'] for i in no_caps_issues]}"
+    )
+
+
 def test_casey_rule_anti_anchor_proximity_musk():
     result = scan_for_ai_tells(
         "Like Elon Musk says, you have to disrupt everything.", brand="casey"

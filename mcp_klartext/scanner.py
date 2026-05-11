@@ -239,6 +239,10 @@ _ALL_CAPS_WHITELIST: frozenset[str] = frozenset({
     "B2B", "B2C", "DACH", "EU", "DE", "EN", "NL", "USD", "EUR", "GBP",
     "PR", "CI", "CD", "CTO", "CEO", "PO", "PM", "QA", "DR", "SRE",
     "GDPR", "DSGVO", "BSI", "NIS2", "ISO", "AGB",
+    # Brand-collapse smoke 2026-05-11: technical-domain acronyms that
+    # surface in engineering-flavoured drafts. Added after these tripped
+    # NO_ALL_CAPS in legitimate writing and required manual rewrites.
+    "FLUX", "BFL", "OIDC", "README", "LLM", "MKB", "XLIFF", "TM",
 })
 
 
