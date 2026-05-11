@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.13] - 2026-05-11
+
+- feat(scanner): widen NO_ALL_CAPS whitelist for technical acronyms
+
+
 ## [0.2.9] - 2026-04-25
 
 - feat(references): reference surfacing + AI image attribution scan (CDI-1014) (#10)
