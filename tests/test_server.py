@@ -12,11 +12,20 @@ from mcp_klartext.server import mcp
 
 
 def _payload(result: Any) -> dict:
-    """Extract the JSON dict payload returned by a tool call."""
-    if getattr(result, "data", None) is not None:
-        return result.data
+    """Extract the JSON dict payload returned by a tool call.
+
+    Tools now declare Pydantic return types, so ``result.data`` is a typed
+    model object. Prefer ``structured_content`` (the serialised dict) so these
+    assertions stay dict-shaped; fall back to dumping the model, then to the
+    text content block.
+    """
     if getattr(result, "structured_content", None):
         return result.structured_content
+    data = getattr(result, "data", None)
+    if data is not None:
+        if hasattr(data, "model_dump"):
+            return data.model_dump(by_alias=True, exclude_none=True)
+        return data
     # Fall back to parsing the first text content block.
     return json.loads(result.content[0].text)
 

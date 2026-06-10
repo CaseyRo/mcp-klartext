@@ -7,14 +7,24 @@ from typing import Literal
 
 from datetime import datetime, timezone
 
-from fastmcp import FastMCP
-from mcp.types import Icon
+from fastmcp import Context, FastMCP
+from mcp.types import Icon, ToolAnnotations
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from mcp_klartext import __version__
 from mcp_klartext.auth import BearerTokenVerifier
 from mcp_klartext.config import settings
+from mcp_klartext.models import (
+    BrandContextResult,
+    CaptionResult,
+    GenerateTextContextResult,
+    PlatformListing,
+    PlatformTemplateResult,
+    ReadMoreResult,
+    ScanResult,
+    VoiceDnaResult,
+)
 from mcp_klartext.platforms import load_platforms
 from mcp_klartext.brands import lookup_brand
 from mcp_klartext.references import (
@@ -74,8 +84,39 @@ _api_key = settings.mcp_api_key.get_secret_value()
 _auth = BearerTokenVerifier(api_key=_api_key) if _api_key else None
 _start_time = datetime.now(timezone.utc)
 
+_INSTRUCTIONS = """\
+Klartext serves brand-aware copywriting *context* for Casey's voice — it is
+content-only. It does not generate or store text; it returns the markdown rules
+(voice DNA, brand contexts, register overlays, platform templates, AI-tell scan
+results) for the calling LLM to follow, then write the finished copy itself.
+
+How to pick a tool:
+- Generating new copy? Call `generate_text_context` ONCE — it merges voice DNA +
+  brand rules + register overlay + platform template + scan rules in a single
+  response. Prefer it over the three granular accessors.
+- Need just one piece? Use `get_voice_dna`, `get_brand_context`, `list_platforms`,
+  or `get_platform_template`.
+- Finishing a draft? ALWAYS run `scan_draft` before emitting the final Output
+  Format block. If `clean` is false, rewrite the flagged high/medium spans and
+  re-scan until clean.
+- Embedding a Bildsprache image or citing sources? Use `render_ai_image_caption`
+  and `render_readmore` to stay inside the AI-transparency contract.
+
+Brands (May 2026 collapse): only `casey` and `yorizon` are active. The `casey`
+brand REQUIRES a register — `personal` (recognition / manifesto voice) or
+`professional` (verification / workshop voice). Legacy keys (casey-berlin,
+cdit-works, storykeep, nah, ...) return a migration error pointing at the right
+casey+register combination. Yorizon does not use registers.
+
+Reference data is also available without spending a tool call: read the
+`klartext://brands`, `klartext://platforms`, `klartext://platforms/{platform}`,
+`klartext://voice-dna`, and `klartext://brand-detection` resources. The
+`draft_and_scan` prompt encodes the full generate → scan → fix → emit loop.
+"""
+
 mcp = FastMCP(
     "mcp-klartext",
+    instructions=_INSTRUCTIONS,
     auth=_auth,
     icons=[
         Icon(
@@ -87,14 +128,23 @@ mcp = FastMCP(
 )
 
 
-@mcp.tool
+@mcp.tool(
+    tags={"content"},
+    annotations=ToolAnnotations(
+        title="Generate writing context (one-shot)",
+        readOnlyHint=True,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+)
 async def generate_text_context(
     context: str | None = None,
     platform: str | None = None,
     language: str | None = None,
     register: Literal["personal", "professional"] | None = None,
     references: list[dict] | None = None,
-) -> dict:
+    ctx: Context | None = None,
+) -> GenerateTextContextResult:
     """[content] Get complete writing context for brand-aware content generation.
 
     Returns voice DNA rules, brand-specific settings (with the appropriate
@@ -124,6 +174,14 @@ async def generate_text_context(
                     echoes these back under `references_passthrough` so the
                     caller can persist them into the draft's frontmatter.
     """
+    if ctx is not None:
+        await ctx.info(
+            "Merging voice DNA"
+            + (f" + brand '{context}'" if context else "")
+            + (f"/{register}" if register else "")
+            + (f" + platform '{platform}'" if platform else "")
+        )
+
     result: dict = {
         "voice_dna": voice_data.voice_dna,
         "brand_detection": voice_data.brand_detection,
@@ -225,11 +283,22 @@ async def generate_text_context(
     if references:
         result["references_passthrough"] = references
 
+    if ctx is not None:
+        await ctx.info("Writing context assembled. Run scan_draft before finalizing.")
+
     return result
 
 
-@mcp.tool
-async def get_voice_dna() -> dict:
+@mcp.tool(
+    tags={"content"},
+    annotations=ToolAnnotations(
+        title="Get voice DNA",
+        readOnlyHint=True,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+)
+async def get_voice_dna() -> VoiceDnaResult:
     """[content] Get Casey's voice DNA rules for content generation.
 
     Returns opening patterns, sentence architecture, signature moves,
@@ -241,11 +310,19 @@ async def get_voice_dna() -> dict:
     }
 
 
-@mcp.tool
+@mcp.tool(
+    tags={"content"},
+    annotations=ToolAnnotations(
+        title="Get brand context",
+        readOnlyHint=True,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+)
 async def get_brand_context(
     context: str | None = None,
     register: Literal["personal", "professional"] | None = None,
-) -> dict:
+) -> BrandContextResult:
     """[content] Get brand-specific voice, visual, and language settings.
 
     Active brands (May 2026 collapse): ``casey``, ``yorizon``.
@@ -314,8 +391,16 @@ async def get_brand_context(
     }
 
 
-@mcp.tool
-async def list_platforms() -> dict:
+@mcp.tool(
+    tags={"content"},
+    annotations=ToolAnnotations(
+        title="List platform templates",
+        readOnlyHint=True,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+)
+async def list_platforms() -> PlatformListing:
     """[content] List available platform templates with their key constraints."""
     return {
         "platforms": [
@@ -329,7 +414,15 @@ async def list_platforms() -> dict:
     }
 
 
-@mcp.tool
+@mcp.tool(
+    tags={"content"},
+    annotations=ToolAnnotations(
+        title="Get platform template",
+        readOnlyHint=True,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+)
 async def get_platform_template(
     platform: Literal[
         "linkedin-post",
@@ -341,7 +434,7 @@ async def get_platform_template(
         "instagram",
         "whatsapp",
     ],
-) -> dict:
+) -> PlatformTemplateResult:
     """[content] Get a specific platform's full template with structure and constraints.
 
     Args:
@@ -360,8 +453,20 @@ async def get_platform_template(
     }
 
 
-@mcp.tool
-async def scan_draft(text: str, brand: str | None = None) -> dict:
+@mcp.tool(
+    tags={"content"},
+    annotations=ToolAnnotations(
+        title="Scan draft for AI tells",
+        readOnlyHint=True,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+)
+async def scan_draft(
+    text: str,
+    brand: str | None = None,
+    ctx: Context | None = None,
+) -> ScanResult:
     """[content] Scan a draft for AI-tell patterns before finalizing it.
 
     Implements the AI Bleed Scan rubric (see voice DNA) programmatically.
@@ -380,14 +485,30 @@ async def scan_draft(text: str, brand: str | None = None) -> dict:
         brand: the brand argument echoed back
         clean: true iff no high or medium severity hits
     """
-    return scan_for_ai_tells(text, brand=brand)
+    result = scan_for_ai_tells(text, brand=brand)
+    if ctx is not None:
+        stats = result["stats"]
+        verdict = "clean" if result["clean"] else "needs rewrites"
+        await ctx.info(
+            f"Scan {verdict}: {stats['high']} high, {stats['medium']} medium, "
+            f"{stats['low']} low across {stats['word_count']} words."
+        )
+    return result
 
 
-@mcp.tool
+@mcp.tool(
+    tags={"content"},
+    annotations=ToolAnnotations(
+        title="Render 'Read more' block",
+        readOnlyHint=True,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+)
 async def render_readmore(
     draft_markdown: str,
     language: Literal["de", "en", "nl"] = "en",
-) -> dict:
+) -> ReadMoreResult:
     """[content] Render a 'Weiterlesen' / 'Read more' block from a draft's references.
 
     Stateless — parses the YAML frontmatter of the provided draft, looks for
@@ -423,11 +544,19 @@ async def render_readmore(
     }
 
 
-@mcp.tool
+@mcp.tool(
+    tags={"content"},
+    annotations=ToolAnnotations(
+        title="Render AI image caption",
+        readOnlyHint=True,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+)
 async def render_ai_image_caption(
     attribution: dict,
     language: Literal["de", "en", "nl"] = "en",
-) -> dict:
+) -> CaptionResult:
     """[content] Render a figure caption from an ai_attribution payload.
 
     Produces a caption string combining (a) the author's `prompt_anchor` as a
@@ -445,7 +574,15 @@ async def render_ai_image_caption(
     return {"caption": render_ai_caption(attribution, language=language)}
 
 
-@mcp.tool
+@mcp.tool(
+    tags={"infra"},
+    annotations=ToolAnnotations(
+        title="Portal routing guide",
+        readOnlyHint=True,
+        idempotentHint=True,
+        openWorldHint=True,
+    ),
+)
 async def portal_routing_guide() -> dict:
     """[infra] Returns a routing guide mapping common intents to the correct upstream MCP server.
 
@@ -554,6 +691,197 @@ async def portal_routing_guide() -> dict:
             "send message": "For live-chat → watermelon. For social DMs → zernio.",
         },
     }
+
+
+# --------------------------------------------------------------------------- #
+# Resources — reference data clients can pull without spending a tool call.
+# Same content the tools return, addressable under the klartext:// scheme.
+# --------------------------------------------------------------------------- #
+
+
+@mcp.resource(
+    "klartext://brands",
+    name="Active brands",
+    description="The active brand catalog (May 2026 collapse): casey + yorizon, with their registers.",
+    mime_type="application/json",
+    tags={"content"},
+    annotations={"readOnlyHint": True, "idempotentHint": True},
+)
+def brands_resource() -> dict:
+    """Active brand catalog with previews and available registers."""
+    return {
+        "brands": [
+            {
+                "key": k,
+                "name": v.name,
+                "preview": v.content[:200],
+                "registers": list(v.registers.keys()) if v.registers else None,
+            }
+            for k, v in voice_data.brands.items()
+        ],
+        "registers": list(_VALID_REGISTERS),
+    }
+
+
+@mcp.resource(
+    "klartext://brands/{brand}",
+    name="Brand rules",
+    description="Full voice/visual/language rules for a single active brand (casey | yorizon).",
+    mime_type="application/json",
+    tags={"content"},
+    annotations={"readOnlyHint": True, "idempotentHint": True},
+)
+def brand_resource(brand: str) -> dict:
+    """Full rules for one active brand, including any register overlays."""
+    cleaned = brand.strip().lstrip("@").lower()
+    if cleaned in _REMOVED_BRANDS:
+        return {
+            "error": _REMOVED_BRANDS[cleaned],
+            "removed": cleaned,
+            "active": ["casey", "yorizon"],
+        }
+    found = lookup_brand(voice_data.brands, brand)
+    if found is None:
+        return {
+            "error": f"Unknown brand context: {brand}",
+            "available": list(voice_data.brands.keys()),
+        }
+    payload: dict = {"name": found.name, "rules": found.content}
+    if found.registers:
+        payload["registers"] = {
+            name: reg.content for name, reg in found.registers.items()
+        }
+    return payload
+
+
+@mcp.resource(
+    "klartext://platforms",
+    name="Platform templates",
+    description="All platform templates with their one-line constraints summary.",
+    mime_type="application/json",
+    tags={"content"},
+    annotations={"readOnlyHint": True, "idempotentHint": True},
+)
+def platforms_resource() -> dict:
+    """All platform keys with summaries."""
+    return {
+        "platforms": [
+            {"key": k, "name": v.name, "summary": v.summary}
+            for k, v in platform_data.items()
+        ],
+    }
+
+
+@mcp.resource(
+    "klartext://platforms/{platform}",
+    name="Platform template",
+    description="Full structure + constraints for a single platform template.",
+    mime_type="application/json",
+    tags={"content"},
+    annotations={"readOnlyHint": True, "idempotentHint": True},
+)
+def platform_resource(platform: str) -> dict:
+    """Full template for one platform."""
+    tmpl = platform_data.get(platform)
+    if tmpl is None:
+        return {
+            "error": f"Unknown platform: {platform}",
+            "available": list(platform_data.keys()),
+        }
+    return {"platform": tmpl.name, "template": tmpl.content}
+
+
+@mcp.resource(
+    "klartext://voice-dna",
+    name="Voice DNA",
+    description="Casey's concatenated voice DNA rubric (DNA + trilingual + handshake + output + calibration + bleed scan).",
+    mime_type="text/markdown",
+    tags={"content"},
+    annotations={"readOnlyHint": True, "idempotentHint": True},
+)
+def voice_dna_resource() -> str:
+    """The full voice DNA markdown."""
+    return voice_data.voice_dna
+
+
+@mcp.resource(
+    "klartext://brand-detection",
+    name="Brand detection rules",
+    description="Heuristics for inferring the intended brand/register from a prompt.",
+    mime_type="text/markdown",
+    tags={"content"},
+    annotations={"readOnlyHint": True, "idempotentHint": True},
+)
+def brand_detection_resource() -> str:
+    """The brand-detection markdown."""
+    return voice_data.brand_detection
+
+
+# --------------------------------------------------------------------------- #
+# Prompts — guided workflows for the server's signature multi-step jobs.
+# --------------------------------------------------------------------------- #
+
+
+@mcp.prompt(
+    name="draft_and_scan",
+    description="Guided loop: generate in Casey's voice, scan for AI tells, fix, re-scan, emit the Output Format block.",
+    tags={"content"},
+)
+def draft_and_scan_prompt(
+    brief: str,
+    brand: str = "casey",
+    register: str = "professional",
+    platform: str = "blog",
+    language: str = "en",
+) -> str:
+    """Return the canonical draft → scan → fix → emit workflow as a prompt."""
+    return (
+        f"Write copy for this brief: {brief}\n\n"
+        f"Brand: {brand}  Register: {register}  Platform: {platform}  "
+        f"Language: {language}\n\n"
+        "Follow this loop exactly:\n"
+        "1. Call `generate_text_context` ONCE with the parameters above to load "
+        "voice DNA + brand rules + register overlay + platform template. Do not "
+        "call the granular accessors separately.\n"
+        "2. Draft the copy strictly in that voice. Obey the casey hard rules "
+        "(no em-dashes, no all-caps, anti-anchor proximity) when brand=casey.\n"
+        "3. Call `scan_draft` with the draft text (and brand) before showing "
+        "anything to the user.\n"
+        "4. If `clean` is false, rewrite ONLY the flagged high/medium spans using "
+        "each issue's `suggestion`, then call `scan_draft` again. Repeat until "
+        "`clean` is true.\n"
+        "5. If the draft cites sources or embeds Bildsprache images, call "
+        "`render_readmore` and `render_ai_image_caption` and fold the results in.\n"
+        "6. Emit the final copy inside the voice DNA's Output Format block.\n\n"
+        "Return only the finished copy plus a one-line note of the final scan "
+        "verdict."
+    )
+
+
+@mcp.prompt(
+    name="brand_voice_brief",
+    description="Load and summarise a brand+register's voice rules before writing, with the key do/don't list.",
+    tags={"content"},
+)
+def brand_voice_brief_prompt(
+    brand: str = "casey",
+    register: str = "professional",
+) -> str:
+    """Return a prompt that loads and distils a brand/register voice brief."""
+    return (
+        f"Prepare to write as brand='{brand}'"
+        + (f" register='{register}'" if brand == "casey" else "")
+        + ".\n\n"
+        "Steps:\n"
+        "1. Read the `klartext://voice-dna` resource and the "
+        f"`klartext://brands/{brand}` resource (use the matching register "
+        "overlay for casey).\n"
+        "2. Summarise, in <=10 bullets, the voice's signature moves, the "
+        "vocabulary to use, and the vocabulary/patterns to avoid.\n"
+        "3. State the hard rules that will be enforced by `scan_draft` so the "
+        "first draft already complies.\n\n"
+        "Output the brief only — do not write the copy yet."
+    )
 
 
 @mcp.custom_route("/health", methods=["GET"])

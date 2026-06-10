@@ -10,9 +10,19 @@ from mcp_klartext.voice import _extract_registers, load_voice_data
 
 
 def _payload(result):
-    """FastMCP returns a CallToolResult; pull the JSON content out."""
+    """FastMCP returns a CallToolResult; pull the JSON content out.
+
+    Tools now declare Pydantic return types, so ``result.data`` is a typed
+    model. Prefer ``structured_content`` (the serialised dict) so assertions
+    stay dict-shaped.
+    """
+    if getattr(result, "structured_content", None):
+        return result.structured_content
     if hasattr(result, "data") and result.data is not None:
-        return result.data
+        data = result.data
+        if hasattr(data, "model_dump"):
+            return data.model_dump(by_alias=True, exclude_none=True)
+        return data
     if hasattr(result, "content") and result.content:
         first = result.content[0]
         if hasattr(first, "text"):
