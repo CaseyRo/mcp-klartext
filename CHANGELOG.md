@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.16] - 2026-06-10
+
+- ci(deps): bump actions/checkout from 4 to 6 (#8)
+
+
 ## [0.2.13] - 2026-05-11
 
 - feat(scanner): widen NO_ALL_CAPS whitelist for technical acronyms
