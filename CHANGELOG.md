@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.17] - 2026-06-10
+
+- ci: add Komodo post-build deploy trigger (GHCR race fix) (#22)
+
+
 ## [0.2.16] - 2026-06-10
 
 - ci(deps): bump actions/checkout from 4 to 6 (#8)
